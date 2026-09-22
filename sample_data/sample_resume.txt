@@ -1,0 +1,17 @@
+ALEX SAMPLE (fictional sample resume for testing)
+
+EXPERIENCE
+Product Manager, Payments Platform — Big Bank Co. (2022–present)
+- Led roadmap for an internal payments API used by 12 product teams
+- Partnered with 20 engineers to cut integration time from 6 weeks to 2
+- Built SQL dashboards tracking API adoption and error rates
+
+Founding PM — Early Startup (2020–2022)
+- Took a B2B scheduling product from zero to 40 paying customers
+- Ran 30+ customer discovery interviews to define the MVP
+
+Consultant — Strategy Consulting Firm (2017–2020)
+- Built a GenAI use-case prioritization framework for a Fortune 100 retailer
+
+SKILLS
+Product strategy, customer discovery, SQL, roadmapping, stakeholder management

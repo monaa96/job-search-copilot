@@ -1,0 +1,23 @@
+Product Manager, AI Platform — Example Corp (fictional sample)
+
+About the role
+We're looking for a Product Manager to own our internal AI platform, which lets
+product teams across the company ship LLM-powered features safely and quickly.
+
+What you'll do
+- Define the strategy and roadmap for the AI platform, balancing internal team needs
+- Partner with engineering, data science, and legal on model evaluation and safety
+- Run customer discovery with internal product teams and turn it into requirements
+- Define success metrics and run experiments to measure adoption and quality
+- Communicate priorities and tradeoffs to senior leadership
+
+Requirements
+- 4+ years of product management experience, ideally on technical or platform products
+- Hands-on experience shipping products that use LLMs or machine learning
+- Strong analytical skills; comfortable writing SQL and interpreting A/B test results
+- Experience working closely with engineering on APIs or developer-facing products
+- Excellent written communication
+
+Nice to have
+- Background in consulting or strategy
+- Experience with evaluation frameworks for AI systems
