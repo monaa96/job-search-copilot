@@ -1,9 +1,12 @@
-"""Daily job scan.
+"""Daily job scan, for every user or just one.
 
-    tracked companies → fetch open jobs (free) → keyword filter (free)
-      → quick AI fit check on new jobs (cheap) → full analysis on the best few
+    tracked companies → fetch open jobs once per company (free)
+      → each user's keyword filter (free)
+      → quick AI fit check on each user's new jobs (cheap, capped per user per day)
+      → full analysis on each user's best few (capped per user per day)
 
-Run from the app's "Scan now" button, or from the command line:
+Runs from the app's "Scan now" button (one user), or for all users from the
+command line / the daily GitHub Actions workflow:
     python scout.py
 """
 
@@ -19,13 +22,9 @@ from pydantic import BaseModel, Field
 
 import database
 import job_sources
+import limits
 from analyzer import MODEL, SCORING_GUIDE, analyze_fit, resume_block
-from search_profile import load_resume
 
-# Caps that keep a single scan's cost predictable. Jobs over the cap wait for
-# the next scan rather than being dropped.
-MAX_FIT_CHECKS_PER_SCAN = 60
-MAX_FULL_ANALYSES_PER_SCAN = 3
 PARALLEL_REQUESTS = 4
 
 
@@ -46,9 +45,13 @@ def _posting_text(p: dict) -> str:
             f"Location: {p['location']}\n\n{p['description']}\n</job_posting>")
 
 
-def quick_fit(client: anthropic.Anthropic, posting: dict, resume_text, resume_pdf) -> QuickFit | None:
-    resume = resume_block(resume_text, resume_pdf)
-    # The resume is identical on every call in a scan, so cache it.
+def _has_resume(user: dict) -> bool:
+    return bool(user["resume_pdf"] or user["resume_text"])
+
+
+def quick_fit(client: anthropic.Anthropic, posting: dict, user: dict) -> QuickFit | None:
+    resume = resume_block(user["resume_text"], user["resume_pdf"])
+    # The resume is identical on every call for this user, so cache it.
     resume["cache_control"] = {"type": "ephemeral"}
     response = client.messages.parse(
         model=MODEL,
@@ -63,97 +66,101 @@ def quick_fit(client: anthropic.Anthropic, posting: dict, resume_text, resume_pd
     return response.parsed_output
 
 
-def analyze_posting(posting: dict, resume_text=None, resume_pdf=None, client=None) -> int:
-    """Run the full fit analysis on a posting and link it. Returns the analysis id."""
-    if not (resume_text or resume_pdf):
-        resume_text, resume_pdf = load_resume()
-    result = analyze_fit(_posting_text(posting), resume_text=resume_text, resume_pdf=resume_pdf, client=client)
-    analysis_id = database.save_analysis(_posting_text(posting), result, MODEL)
+def analyze_posting(user: dict, posting: dict, client: anthropic.Anthropic | None = None) -> int:
+    """Run the full fit analysis on one of a user's postings. Returns the analysis id."""
+    limits.require(user, "analyses")
+    result = analyze_fit(_posting_text(posting), resume_text=user["resume_text"],
+                         resume_pdf=user["resume_pdf"], client=client)
+    limits.use(user, "analyses")
+    analysis_id = database.save_analysis(user["id"], _posting_text(posting), result, MODEL)
     database.set_posting_analysis(posting["id"], analysis_id)
     return analysis_id
 
 
-def run_scan(log: Callable[[str], None] = print) -> str:
-    """Scan all tracked companies. Returns a one-line summary."""
-    database.init_db()
-    profile = database.get_profile()
-    resume_text, resume_pdf = load_resume()
-    if not (resume_text or resume_pdf):
-        raise RuntimeError("Save your resume first (sidebar).")
-    companies = database.list_companies("tracking")
-    if not companies:
-        raise RuntimeError("You're not tracking any companies yet. Add some in the Companies tab.")
+def run_scan(user_ids: list[int] | None = None, log: Callable[[str], None] = print) -> dict[int, str]:
+    """Scan tracked companies for the given users (default: everyone).
 
-    # 1. Fetch and filter (no AI, no cost).
-    new_count = 0
-    for company in companies:
+    Returns {user_id: one-line summary}.
+    """
+    database.init_db()
+    all_users = [database.get_user(uid) for uid in (user_ids or database.list_user_ids())]
+    users = {u["id"]: u for u in all_users if u and _has_resume(u)}
+    profiles = {uid: database.get_profile(u) for uid, u in users.items()}
+    companies = database.tracked_companies(list(users))
+    if not companies:
+        raise RuntimeError("No tracked companies to scan. Add some in the Companies tab.")
+
+    # 1. Fetch each company once and apply each user's filter (no AI, no cost).
+    new_counts = {uid: 0 for uid in users}
+    for company in companies.values():
         try:
             jobs = job_sources.fetch_jobs(company["ats"], company["ats_slug"])
         except Exception as e:
             log(f"⚠️ {company['name']}: couldn't fetch jobs ({e})")
             continue
-        known = database.get_postings_by_external_id(company["id"])
-        company_new = 0
-        for job in jobs:
-            passes = profile.matches(job["title"], job["location"])
-            existing = known.get(job["external_id"])
-            if existing is None:
-                database.insert_posting(company["id"], job, "new" if passes else "filtered")
-                company_new += passes
-            elif existing["status"] == "filtered" and passes:
-                # Profile changed since we first saw this job; it now qualifies.
-                database.refresh_posting(existing["id"], job, status="new")
-                company_new += 1
-            else:
-                database.refresh_posting(existing["id"], job)
-        database.mark_closed(company["id"], {j["external_id"] for j in jobs})
-        new_count += company_new
-        log(f"{company['name']}: {len(jobs)} open jobs, {company_new} new matching your filters")
+        matches = {uid: [j for j in jobs if profiles[uid].matches(j["title"], j["location"])]
+                   for uid in company["user_ids"] if uid in users}
+        keep = {j["external_id"] for matched in matches.values() for j in matched}
+        posting_ids = database.upsert_postings(company["id"], jobs, keep)
+        for uid, matched in matches.items():
+            added = database.add_user_postings(uid, [posting_ids[j["external_id"]] for j in matched])
+            new_counts[uid] += added
+        log(f"{company['name']}: {len(jobs)} open jobs")
 
-    # 2. Quick fit check on new matches.
-    to_check = database.postings_needing_fit_check(MAX_FIT_CHECKS_PER_SCAN)
+    # 2. Quick fit check on each user's new matches, within their daily limit.
     client = anthropic.Anthropic()
-    if to_check:
-        log(f"Checking fit for {len(to_check)} new jobs…")
+    tasks = []
+    for uid, user in users.items():
+        batch = database.postings_needing_fit_check(uid, limits.remaining(user, "fit_checks"))
+        tasks += [(user, p) for p in batch]
+    if tasks:
+        log(f"Checking fit for {len(tasks)} new jobs…")
 
-        def check(p):
-            try:
-                return p, quick_fit(client, p, resume_text, resume_pdf), None
-            except anthropic.APIError as e:
-                return p, None, e
-
-        # Results are handled here, on the main thread, because the UI's log
-        # can't be written to from worker threads.
-        with ThreadPoolExecutor(PARALLEL_REQUESTS) as pool:
-            for p, fit, error in pool.map(check, to_check):
-                if error:
-                    log(f"⚠️ Fit check failed for {p['title']} at {p['company']}: {error}")
-                elif fit:
-                    database.set_fit(p["id"], max(0, min(100, fit.score)), fit.reason)
-    waiting = database.count_postings_needing_fit_check()
-    if waiting:
-        log(f"{waiting} more jobs will be checked on the next scan.")
-
-    # 3. Full analysis on the strongest new matches.
-    top = [p for p in database.list_scored_postings(profile.min_score, ("new",)) if not p["analysis_id"]]
-    top = top[:MAX_FULL_ANALYSES_PER_SCAN]
-    for p in top:
-        log(f"Full analysis: {p['title']} at {p['company']} ({p['fit_score']})")
+    def check(task):
+        user, p = task
         try:
-            analyze_posting(p, resume_text, resume_pdf, client)
-        except Exception as e:
-            log(f"⚠️ Full analysis failed for {p['title']}: {e}")
+            return user, p, quick_fit(client, p, user), None
+        except anthropic.APIError as e:
+            return user, p, None, e
 
-    above = len(database.list_scored_postings(profile.min_score, ("new",)))
-    summary = (f"{datetime.now():%b %d, %I:%M %p}: {len(companies)} companies scanned, "
-               f"{new_count} new matching jobs, {above} in your list at {profile.min_score}+")
-    database.set_last_scan(summary)
-    log(summary)
-    return summary
+    # Results are handled here, on the main thread, because the UI's log
+    # can't be written to from worker threads.
+    with ThreadPoolExecutor(PARALLEL_REQUESTS) as pool:
+        for user, p, fit, error in pool.map(check, tasks):
+            if error:
+                log(f"⚠️ Fit check failed for {p['title']} at {p['company']}: {error}")
+                continue
+            limits.use(user, "fit_checks")
+            if fit:
+                database.set_fit(p["id"], max(0, min(100, fit.score)), fit.reason)
+
+    # 3. Full analysis on each user's strongest new matches, then summarize.
+    summaries = {}
+    for uid, user in users.items():
+        profile = profiles[uid]
+        top = [p for p in database.list_scored_postings(uid, profile.min_score, ("new",)) if not p["analysis_id"]]
+        budget = min(limits.AUTO_ANALYSES_PER_SCAN[limits.is_owner(user)], limits.remaining(user, "analyses"))
+        for p in top[:budget]:
+            log(f"Full analysis: {p['title']} at {p['company']} ({p['fit_score']})")
+            try:
+                analyze_posting(user, p, client)
+            except Exception as e:
+                log(f"⚠️ Full analysis failed for {p['title']}: {e}")
+
+        in_list = len(database.list_scored_postings(uid, profile.min_score, ("new",)))
+        waiting = database.count_postings_needing_fit_check(uid)
+        summary = (f"{datetime.now():%b %d, %I:%M %p}: {new_counts[uid]} new matching jobs, "
+                   f"{in_list} in your list at {profile.min_score}+")
+        if waiting:
+            summary += f", {waiting} more to check tomorrow"
+        database.set_last_scan(uid, summary)
+        summaries[uid] = summary
+    log(f"Scan finished for {len(users)} user(s).")
+    return summaries
 
 
 def notify(message: str) -> None:
-    """Show a macOS notification (no-op elsewhere)."""
+    """Show a macOS notification (no-op elsewhere, e.g. in GitHub Actions)."""
     import subprocess
     import sys
     if sys.platform == "darwin":
@@ -164,7 +171,8 @@ def notify(message: str) -> None:
 if __name__ == "__main__":
     load_dotenv(Path(__file__).parent / ".env")
     try:
-        notify(run_scan())
+        results = run_scan()
+        notify(next(iter(results.values())) if len(results) == 1 else f"Scanned jobs for {len(results)} users")
     except Exception as e:
         notify(f"Daily scan failed: {e}")
         raise

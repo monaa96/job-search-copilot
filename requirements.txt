@@ -1,5 +1,7 @@
-anthropic>=0.70
-streamlit>=1.40
+anthropic>=1.0
+streamlit[auth]>=1.42
 pydantic>=2.0
 python-dotenv>=1.0
 requests>=2.31
+sqlalchemy>=2.0
+psycopg[binary]>=3.2

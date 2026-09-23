@@ -1,101 +1,128 @@
 {
   "job_title": "Product Manager, AI Platform",
   "company": "Example Corp",
-  "match_score": 71,
-  "verdict": "This candidate is a genuinely strong internal-platform PM whose payments API work maps almost one-to-one onto the AI platform's core job: serving internal product teams, partnering deeply with engineering, and reducing time-to-integration. The one real obstacle is the hands-on LLM/ML shipping requirement, where the resume shows strategy-level AI exposure from consulting but no evidence of actually building or launching an ML-powered product.",
+  "match_score": 68,
+  "verdict": "Alex is a credible platform PM with directly relevant internal-API and developer-customer experience, plus the consulting background this role lists as a nice-to-have. The blocker is the one hard requirement with no supporting evidence: hands-on experience shipping LLM or ML-powered products — a GenAI prioritization framework built as a consultant is strategy work, not shipping, so this is a stretch application that hinges on how literally the hiring team reads that requirement.",
   "strong_matches": [
     {
-      "skill": "4+ years of product management experience",
-      "evidence": "Founding PM at Early Startup (2020–2022) plus Product Manager, Payments Platform at Big Bank Co. (2022–present) adds up to roughly five years of PM work, preceded by three years of consulting."
+      "skill": "4+ years of product management experience on technical or platform products",
+      "evidence": "Big Bank Co. — Product Manager, Payments Platform since 2022 owning an internal payments API, plus Founding PM at Early Startup 2020–2022, giving roughly five years of PM experience, most of it on platform/technical products."
     },
     {
-      "skill": "Platform and developer-facing product experience",
-      "evidence": "At Big Bank Co. led the roadmap for an internal payments API consumed by 12 product teams — an internal-platform product with developer customers, structurally the same as the AI platform role."
+      "skill": "Experience working closely with engineering on APIs or developer-facing products",
+      "evidence": "At Big Bank Co., led the roadmap for an internal payments API consumed by 12 product teams and partnered with 20 engineers to cut integration time from 6 weeks to 2."
     },
     {
-      "skill": "Working closely with engineering on APIs",
-      "evidence": "Partnered with 20 engineers at Big Bank Co. to cut API integration time from 6 weeks to 2 weeks, which is direct evidence of engineering-side collaboration on a developer-facing surface."
+      "skill": "Run customer discovery with internal product teams and turn it into requirements",
+      "evidence": "At Early Startup, ran 30+ customer discovery interviews to define the MVP; at Big Bank Co., the internal API's 12 consuming product teams were effectively the internal customer base for roadmap decisions."
     },
     {
-      "skill": "Customer discovery translated into requirements",
-      "evidence": "Ran 30+ customer discovery interviews as Founding PM at Early Startup to define the MVP, and served 12 internal product teams as the customer base at Big Bank Co."
+      "skill": "Comfortable writing SQL and defining adoption metrics",
+      "evidence": "At Big Bank Co., built SQL dashboards tracking API adoption and error rates — the same adoption/quality metric pattern this role asks for."
     },
     {
-      "skill": "SQL and analytical instrumentation",
-      "evidence": "Built SQL dashboards at Big Bank Co. tracking API adoption and error rates — the same adoption and quality metrics this role asks the PM to define."
+      "skill": "Serving internal teams as customers / balancing competing internal needs",
+      "evidence": "At Big Bank Co., prioritized a single internal payments API roadmap across 12 product teams with differing needs."
     },
     {
-      "skill": "Consulting/strategy background (nice-to-have)",
-      "evidence": "Three years as a Consultant at a Strategy Consulting Firm, including building a GenAI use-case prioritization framework for a Fortune 100 retailer."
+      "skill": "Nice-to-have: consulting or strategy background",
+      "evidence": "Consultant at a Strategy Consulting Firm 2017–2020, including a GenAI use-case prioritization framework for a Fortune 100 retailer."
     },
     {
-      "skill": "Zero-to-one ownership and stakeholder management",
-      "evidence": "Took a B2B scheduling product from zero to 40 paying customers as Founding PM, and now balances the competing needs of 12 internal teams at Big Bank Co."
+      "skill": "Zero-to-one product ownership",
+      "evidence": "Founding PM at Early Startup: took a B2B scheduling product from zero to 40 paying customers."
     }
   ],
   "skill_gaps": [
     {
       "skill": "Hands-on experience shipping LLM- or ML-powered products",
       "importance": "critical",
-      "why_it_matters": "The entire platform exists to let teams ship LLM features safely, so the PM needs practical intuition about model behavior, latency, cost, and failure modes rather than slide-level AI strategy."
+      "why_it_matters": "The entire platform exists to help teams ship LLM features, so the PM needs lived experience with model behavior, latency, cost and failure modes rather than a consulting-level view of use cases."
+    },
+    {
+      "skill": "Model evaluation and AI safety work with data science and legal",
+      "importance": "critical",
+      "why_it_matters": "A named responsibility of the role, and the resume shows no partnership with data science, legal, risk or compliance on model quality or safety."
     },
     {
       "skill": "Running experiments and interpreting A/B test results",
       "importance": "important",
-      "why_it_matters": "The job explicitly asks the PM to define success metrics and run experiments, and the resume shows dashboarding but no launched test or measured experiment."
+      "why_it_matters": "The role requires defining success metrics and running experiments; the resume shows dashboards and reporting but no evidence of designing or reading out a controlled experiment."
     },
     {
-      "skill": "Model evaluation and AI safety frameworks",
+      "skill": "Evaluation frameworks for AI systems (evals, golden datasets, quality scoring)",
+      "importance": "nice-to-have",
+      "why_it_matters": "Listed as a nice-to-have, but it's how an AI platform PM proves 'quality' is improving and would meaningfully offset the missing LLM shipping experience."
+    },
+    {
+      "skill": "Demonstrated written communication to senior leadership",
       "importance": "important",
-      "why_it_matters": "A core responsibility is partnering with data science and legal on evaluation and safety, which requires familiarity with eval harnesses, red-teaming, and quality benchmarks."
-    },
-    {
-      "skill": "Partnering with data science and legal/risk functions",
-      "importance": "nice-to-have",
-      "why_it_matters": "The role's cross-functional surface is wider than the engineering-only collaboration the resume documents, though banking experience suggests some compliance exposure."
-    },
-    {
-      "skill": "Demonstrated written communication artifacts",
-      "importance": "nice-to-have",
-      "why_it_matters": "The job lists excellent written communication as a requirement and the resume asserts stakeholder management without showing strategy docs, PRDs, or leadership-facing narratives."
+      "why_it_matters": "The role explicitly calls for communicating priorities and tradeoffs to senior leadership, and the resume never mentions executive-facing docs, strategy narratives or reviews."
     }
   ],
   "why_youre_a_fit": [
-    "Your Big Bank Co. payments API role is an internal platform serving 12 product teams — the exact operating model of this AI platform, where the customers are other PMs and engineers rather than end users.",
-    "Cutting integration time from 6 weeks to 2 with 20 engineers proves you can make a platform easy to adopt, which is the primary success metric for an internal AI platform.",
-    "Your 30+ discovery interviews at Early Startup show you can run structured discovery and convert it into requirements, which the job explicitly asks you to do with internal teams.",
-    "The SQL adoption and error-rate dashboards you built at Big Bank Co. are precisely the adoption-and-quality instrumentation this role expects the PM to own.",
-    "Your GenAI use-case prioritization framework for a Fortune 100 retailer hits both nice-to-haves at once — consulting background and structured thinking about where AI is and isn't worth applying.",
-    "Payments at a bank means you've shipped under real risk and compliance constraints, which transfers to the safety and legal partnership this role requires."
+    "You already do the core job in a different domain: at Big Bank Co. you own an internal platform API whose customers are 12 internal product teams — structurally identical to owning an internal AI platform serving product teams.",
+    "You have a hard, defensible platform outcome — cutting integration time from 6 weeks to 2 with 20 engineers — which is exactly the 'ship safely and quickly' promise this AI platform is making to its internal users.",
+    "Your SQL dashboards on API adoption and error rates map directly to the role's ask to define success metrics for adoption and quality.",
+    "Your 30+ discovery interviews at Early Startup prove you can turn unstructured user conversations into requirements, which is the discovery motion this role wants applied to internal teams.",
+    "Your consulting work included a GenAI use-case prioritization framework for a Fortune 100 retailer, so you can speak the language of AI prioritization and tradeoffs even if you haven't shipped the underlying models.",
+    "Founding PM experience taking a product from zero to 40 paying customers signals you can stand up a platform offering that doesn't yet have adoption."
   ],
   "what_to_emphasize": [
-    "Lead with the payments API as an internal developer platform: number of consuming teams, how you prioritized across them, and the 6-weeks-to-2-weeks integration win.",
-    "Reframe the GenAI prioritization framework as your AI credential — what the evaluation criteria were, which use cases you killed and why, and what happened after.",
-    "Quantify platform adoption from your SQL dashboards: which teams onboarded, what error rates looked like before and after, and how you used the data to reprioritize.",
-    "Tell the Early Startup discovery story as a repeatable method, since discovery with internal teams is an explicit responsibility here.",
-    "Highlight any compliance, risk, or legal review you navigated at Big Bank Co. as the closest analog to AI safety and model governance work.",
-    "Bring a short written artifact — a platform strategy memo or a one-page AI platform teardown — to satisfy the written communication bar directly."
+    "Owning an internal API platform for 12 consuming product teams — lead with this; it is the closest analog to the job and the strongest single argument.",
+    "The 6-weeks-to-2-weeks integration time reduction with 20 engineers, framed as developer experience and time-to-ship for internal builders.",
+    "SQL dashboards on adoption and error rates, framed as defining and instrumenting platform success and quality metrics.",
+    "The GenAI use-case prioritization framework for a Fortune 100 retailer — position it as evaluating and prioritizing AI use cases against feasibility and risk, but be honest in interviews that it was advisory, not shipped.",
+    "30+ customer discovery interviews as the method you'd use on internal product teams in the first 90 days.",
+    "Zero-to-one credibility from Early Startup for a platform that still has to earn internal adoption."
   ],
   "skills_to_build": [
     {
-      "skill": "Hands-on LLM product experience",
-      "how": "Ship something real and small: build an internal tool at Big Bank Co. or a side project using an LLM API, and be able to discuss prompt iteration, cost/latency tradeoffs, and where the model failed. Even one shipped feature converts your biggest gap into a talking point."
+      "skill": "Hands-on LLM product shipping",
+      "how": "Build and ship something small but real that calls an LLM API — e.g. a retrieval-backed internal tool — and be able to talk specifically about prompt iteration, latency, cost per call and failure handling in an interview."
     },
     {
-      "skill": "LLM evaluation frameworks",
-      "how": "Learn the vocabulary and practice of evals — golden datasets, LLM-as-judge, regression suites, human review loops. Read a few public eval writeups from AI platform teams and build a tiny eval harness for your own project so you can speak concretely in the interview."
+      "skill": "AI evaluation frameworks",
+      "how": "Create an eval set for your side project: define 30–50 test cases with expected behavior, score outputs, and track quality across prompt or model changes so you can describe an evals-driven release process."
     },
     {
-      "skill": "Experimentation and A/B testing",
-      "how": "Find or reconstruct an experiment from your API rollout — a staged onboarding, a docs change, a default setting — and articulate the hypothesis, metric, and result. If none exists, run one this quarter on platform adoption before you interview."
+      "skill": "Experimentation and A/B test interpretation",
+      "how": "Take a short course on experiment design (sample size, significance, guardrail metrics) and prepare a story about how you would have A/B tested the payments API adoption work you already led."
     },
     {
-      "skill": "AI safety and policy fluency",
-      "how": "Get familiar with common guardrail patterns, PII handling, and a public framework like the NIST AI Risk Management Framework so you can credibly describe how you'd partner with legal on model release criteria."
+      "skill": "AI safety, policy and legal partnership",
+      "how": "Read your target company's published AI principles plus a standard framework like the NIST AI Risk Management Framework, and prepare a point of view on how you'd gate an internal LLM launch with legal and data science."
     },
     {
-      "skill": "Written communication evidence",
-      "how": "Write a public teardown of an internal AI platform (Anthropic, OpenAI, or a company engineering blog) proposing what you'd prioritize in the first 90 days, and link it in your application."
+      "skill": "Executive-facing written communication",
+      "how": "Write a one-to-two page AI platform strategy memo for Example Corp — internal customer segments, adoption metrics, safety guardrails — and offer it as a work sample with your application."
+    }
+  ],
+  "resume_edits": [
+    {
+      "original": "- Led roadmap for an internal payments API used by 12 product teams",
+      "suggested": "- Owned strategy and roadmap for an internal developer platform (payments API) serving 12 internal product teams as customers, balancing competing team needs",
+      "why": "Reframes the role in the job description's own language — internal platform, internal product teams as customers, balancing needs — which is the core of this job."
+    },
+    {
+      "original": "- Built SQL dashboards tracking API adoption and error rates",
+      "suggested": "- Defined platform success metrics and built SQL dashboards tracking adoption and error rates across 12 consuming teams",
+      "why": "Turns a tooling line into evidence of the role's 'define success metrics to measure adoption and quality' responsibility while keeping the SQL keyword."
+    },
+    {
+      "original": "- Built a GenAI use-case prioritization framework for a Fortune 100 retailer",
+      "suggested": "- Built a GenAI use-case prioritization framework for a Fortune 100 retailer, assessing use cases on value, technical feasibility and risk",
+      "why": "Surfaces the only AI-adjacent experience on the resume as structured evaluation and tradeoff work, which is the closest honest bridge to the AI platform and evals requirements."
+    },
+    {
+      "original": "- Partnered with 20 engineers to cut integration time from 6 weeks to 2",
+      "suggested": "- Partnered with 20 engineers to improve developer experience, cutting partner-team integration time from 6 weeks to 2 (67% faster time-to-ship)",
+      "why": "Foregrounds developer-facing impact and time-to-ship, the exact outcome an internal AI platform is measured on."
+    },
+    {
+      "original": "- Ran 30+ customer discovery interviews to define the MVP",
+      "suggested": "- Ran 30+ customer discovery interviews and translated findings into MVP requirements, taking the product from zero to 40 paying customers",
+      "why": "Connects discovery directly to written requirements and a shipped outcome, matching the role's 'turn discovery into requirements' line."
     }
   ]
 }

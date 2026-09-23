@@ -57,3 +57,11 @@ def render_analysis(a: JobFitAnalysis) -> None:
         st.markdown("#### Skills to build")
         for i, s in enumerate(a.skills_to_build, 1):
             st.markdown(f"{i}. **{s.skill}** — {s.how}")
+
+    if a.resume_edits:
+        st.markdown("#### ✍️ Resume suggestions for this role")
+        for edit in a.resume_edits:
+            with st.container(border=True):
+                st.markdown(f"~~{edit.original}~~")
+                st.markdown(f"**→ {edit.suggested}**")
+                st.caption(edit.why)

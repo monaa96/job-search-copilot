@@ -7,11 +7,15 @@ Each company is then checked in job_sources for a public job feed before the
 user is asked to approve it.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
 import anthropic
 from pydantic import BaseModel, Field
 
+import database
+import job_sources
+import limits
 from analyzer import MODEL, resume_block
 from search_profile import SearchProfile
 
@@ -111,3 +115,25 @@ def suggest_companies(
 
     existing = {n.lower() for n in existing_names}
     return [c for c in extracted.parsed_output.companies if c.name.lower() not in existing]
+
+
+def discover_for_user(user: dict, log=print) -> tuple[int, int]:
+    """Suggest companies for a user, check each for a job feed, and save them
+    as suggestions awaiting approval. Returns (trackable, total)."""
+    limits.require(user, "discoveries")
+    profile = database.get_profile(user)
+    existing = [c["name"] for c in database.list_user_companies(user["id"])]
+    suggestions = suggest_companies(profile, existing, user["resume_text"], user["resume_pdf"])
+    limits.use(user, "discoveries")
+
+    log(f"Found {len(suggestions)} companies. Checking which have a public job board…")
+    with ThreadPoolExecutor(6) as pool:
+        boards = list(pool.map(lambda c: job_sources.find_board(c.name, c.careers_url), suggestions))
+
+    trackable = 0
+    for company, board in zip(suggestions, boards):
+        company_id = database.upsert_company(company.name, *board) if board else None
+        database.add_user_company(user["id"], company.name, company.why_it_fits, company_id,
+                                  "suggested" if board else "unverified")
+        trackable += bool(board)
+    return trackable, len(suggestions)

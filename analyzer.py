@@ -5,7 +5,7 @@ import base64
 from typing import List, Literal
 
 import anthropic
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 MODEL = "claude-opus-5"
 
@@ -31,7 +31,21 @@ class SkillToBuild(BaseModel):
     how: str = Field(description="A concrete, short-term way to build or demonstrate this skill")
 
 
+class ResumeEdit(BaseModel):
+    original: str = Field(description="An existing line from the resume, quoted exactly")
+    suggested: str = Field(description="The rewritten line, using only facts already in the resume")
+    why: str = Field(description="What this change signals to this employer, in one sentence")
+
+
+def _require_all_fields(schema: dict) -> None:
+    schema["required"] = list(schema["properties"])
+
+
 class JobFitAnalysis(BaseModel):
+    # Every field is required when Claude generates an analysis; defaults below
+    # only apply when loading older saved analyses.
+    model_config = ConfigDict(json_schema_extra=_require_all_fields)
+
     job_title: str
     company: str = Field(description="Company name, or 'Unknown' if not stated")
     match_score: int = Field(description="Overall fit from 0 to 100")
@@ -41,6 +55,10 @@ class JobFitAnalysis(BaseModel):
     why_youre_a_fit: List[str] = Field(description="Arguments for the candidate, each tied to a specific role on the resume")
     what_to_emphasize: List[str] = Field(description="Ranked resume points to lead with in the application and interviews")
     skills_to_build: List[SkillToBuild] = Field(description="Ranked by impact on this candidate's chances")
+    resume_edits: List[ResumeEdit] = Field(
+        default_factory=list,
+        description="3-5 rewrites of existing resume lines that would strengthen this application, most impactful first",
+    )
 
 
 # Shared with the quick fit check in scout.py so both use the same scale.
@@ -63,6 +81,10 @@ experience is weak evidence.
 ("required", "must", years of experience, vs. "bonus", "preferred").
 - Every strength and every "why you're a fit" point must cite a specific role or project \
 from the resume. Never invent experience the resume doesn't contain.
+- For resume_edits, rewrite existing lines to foreground what this job values: reorder, \
+use the employer's vocabulary for things the candidate actually did, and surface buried \
+metrics. Only use facts already in the resume; never add skills, numbers or experience it \
+doesn't contain. Don't try to paper over gaps with wording.
 - Be candid about gaps. An inflated score is useless to someone deciding where to spend \
 their application time.
 
