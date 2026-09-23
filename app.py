@@ -21,6 +21,14 @@ from ui import render_analysis, show_errors
 load_dotenv(Path(__file__).parent / ".env")
 st.set_page_config(page_title="Job Search Copilot", page_icon="🧭", layout="wide")
 
+# On Streamlit Community Cloud, settings come from the app's Secrets instead of .env.
+try:
+    for key in ("ANTHROPIC_API_KEY", "DEMO_MODE", "DEMO_PASSCODE"):
+        if key in st.secrets and not os.getenv(key):
+            os.environ[key] = str(st.secrets[key])
+except FileNotFoundError:
+    pass  # no secrets file: running locally with .env
+
 # The public deployment runs a restricted demo: nothing is saved and live
 # analysis needs a passcode. See demo.py.
 if os.getenv("DEMO_MODE", "").lower() == "true":
