@@ -43,6 +43,13 @@ class JobFitAnalysis(BaseModel):
     skills_to_build: List[SkillToBuild] = Field(description="Ranked by impact on this candidate's chances")
 
 
+# Shared with the quick fit check in scout.py so both use the same scale.
+SCORING_GUIDE = """Scoring guide for match_score:
+- 85-100: meets essentially all hard requirements; a strong interview candidate
+- 70-84: meets most hard requirements; gaps are learnable or secondary
+- 50-69: meaningful gaps in one or more hard requirements; a stretch application
+- below 50: significant mismatch in seniority, domain, or core skills"""
+
 SYSTEM_PROMPT = """You are an experienced tech recruiter and hiring manager who evaluates \
 candidates for product roles. You compare a candidate's resume against a job description \
 and give an honest, specific assessment of fit.
@@ -59,18 +66,14 @@ from the resume. Never invent experience the resume doesn't contain.
 - Be candid about gaps. An inflated score is useless to someone deciding where to spend \
 their application time.
 
-Scoring guide for match_score:
-- 85-100: meets essentially all hard requirements; a strong interview candidate
-- 70-84: meets most hard requirements; gaps are learnable or secondary
-- 50-69: meaningful gaps in one or more hard requirements; a stretch application
-- below 50: significant mismatch in seniority, domain, or core skills"""
+""" + SCORING_GUIDE
 
 
 class AnalysisError(Exception):
     """Raised when Claude doesn't return a usable analysis."""
 
 
-def _resume_block(resume_text: str | None, resume_pdf: bytes | None) -> dict:
+def resume_block(resume_text: str | None, resume_pdf: bytes | None) -> dict:
     # PDFs go to Claude as-is, which reads them natively, so the app needs no
     # resume-parsing code of its own.
     if resume_pdf:
@@ -108,7 +111,7 @@ def analyze_fit(
             {
                 "role": "user",
                 "content": [
-                    _resume_block(resume_text, resume_pdf),
+                    resume_block(resume_text, resume_pdf),
                     {
                         "type": "text",
                         "text": f"<job_description>\n{job_description}\n</job_description>\n\n"
