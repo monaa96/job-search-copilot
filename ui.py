@@ -49,7 +49,9 @@ def fit_badge(score: int) -> None:
     st.badge(f"{score} · {label}", color=color)
 
 
-def page_header(title: str, subtitle: str = "") -> None:
+def page_header(title: str, subtitle: str = "", eyebrow: str = "") -> None:
+    if eyebrow:
+        st.html(f'<div class="eyebrow">{eyebrow}</div>')
     st.markdown(f"## {title}")
     if subtitle:
         st.caption(subtitle)

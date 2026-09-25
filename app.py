@@ -18,15 +18,17 @@ import job_sources
 import landing
 import limits
 import scout
+import styles
 from analyzer import MODEL, analyze_fit
 from discovery import discover_for_user
 from search_profile import SearchProfile
-from ui import fit_badge, page_header, render_analysis, safe, show_errors
+from ui import fit_badge, fit_label, page_header, render_analysis, safe, show_errors
 
 ROOT = Path(__file__).parent
 load_dotenv(ROOT / ".env")
 st.set_page_config(page_title="Job Search Copilot", page_icon=str(ROOT / "static" / "icon.svg"), layout="wide")
 st.logo(str(ROOT / "static" / "logo.svg"), size="large")
+styles.apply()
 
 # On Streamlit Community Cloud, settings come from the app's Secrets instead of .env.
 # Single-user mode is only allowed when there are no secrets at all (plain local
@@ -180,7 +182,7 @@ def roles_page() -> None:
     header, action = st.columns([4, 1], vertical_alignment="bottom")
     with header:
         page_header("Roles for you", user["last_scan"] and f"Last updated {user['last_scan']}"
-                    or "Updated automatically every morning")
+                    or "Updated automatically every morning", eyebrow="Your daily shortlist")
     if action.button("Check for new roles", icon=":material/refresh:", disabled=not tracking,
                      use_container_width=True):
         refresh_roles()
@@ -197,10 +199,12 @@ def roles_page() -> None:
 
     all_roles = database.list_scored_postings(user["id"], 0, ("new", "saved"))
     strong = [p for p in all_roles if p["fit_score"] >= profile.min_score]
-    m1, m2, m3 = st.columns(3)
-    m1.metric(f"Roles at {profile.min_score}+", len(strong))
-    m2.metric("Saved", sum(p["status"] == "saved" for p in all_roles))
-    m3.metric("Companies watched", len(tracking))
+    metrics = [("blue", f"Roles at {profile.min_score}+", len(strong)),
+               ("green", "Saved", sum(p["status"] == "saved" for p in all_roles)),
+               ("violet", "Companies watched", len(tracking))]
+    for col, (color, label, value) in zip(st.columns(3), metrics):
+        with col, st.container(key=f"metric-{color}"):
+            st.metric(label, value)
 
     view = st.segmented_control("View", ["Best matches", "Saved", "All roles"], default="Best matches",
                                 label_visibility="collapsed")
@@ -222,7 +226,8 @@ def roles_page() -> None:
 
 
 def role_card(p: dict) -> None:
-    with st.container(border=True):
+    _, color = fit_label(p["fit_score"])
+    with st.container(border=True, key=f"role-{color}-{p['id']}"):
         info, actions = st.columns([5, 2], vertical_alignment="top")
         with info:
             st.markdown(f"**{safe(p['title'])}**")
@@ -258,7 +263,8 @@ def role_card(p: dict) -> None:
 def companies_page() -> None:
     header, action = st.columns([4, 1], vertical_alignment="bottom")
     with header:
-        page_header("Companies", "The companies whose job boards are checked for you every morning.")
+        page_header("Companies", "The companies whose job boards are checked for you every morning.",
+                    eyebrow="Your watchlist")
     if action.button("Find more", icon=":material/travel_explore:", use_container_width=True):
         with show_errors(), st.status("Researching companies… 1 to 3 minutes", expanded=True) as status:
             discover_for_user(user, log=st.write)
@@ -313,7 +319,8 @@ def company_row(c: dict, suggested: bool = False) -> None:
 
 
 def match_page() -> None:
-    page_header("Resume match", "Paste any job description to see how you match and how to tailor your resume.")
+    page_header("Resume match", "Paste any job description to see how you match and how to tailor your resume.",
+                eyebrow="Tailor your application")
     job_description = st.text_area("Job description", height=260, placeholder="Paste the full job posting…",
                                    label_visibility="collapsed")
     if st.button("Analyze", type="primary", icon=":material/auto_awesome:", disabled=not job_description.strip()):
