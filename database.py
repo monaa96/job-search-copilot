@@ -133,11 +133,13 @@ def engine() -> Engine:
             @event.listens_for(_engine, "connect")
             def _fk_on(dbapi_conn, _):
                 dbapi_conn.execute("PRAGMA foreign_keys = ON")
+        # Create any missing tables in whichever database we just connected to.
+        metadata.create_all(_engine)
     return _engine
 
 
 def init_db() -> None:
-    metadata.create_all(engine())
+    engine()
 
 
 def _insert(table):

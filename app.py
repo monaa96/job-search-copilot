@@ -39,14 +39,6 @@ except FileNotFoundError:
     HOSTED, AUTH_ENABLED = False, False
 
 
-@st.cache_resource
-def _init_db() -> bool:
-    database.init_db()
-    return True
-
-
-_init_db()
-
 
 def split_list(text: str) -> list[str]:
     return [item.strip() for item in text.split(",") if item.strip()]
