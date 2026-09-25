@@ -10,6 +10,7 @@ runs as a single local user.
 import html
 import os
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import streamlit as st
@@ -19,6 +20,7 @@ import database
 import job_sources
 import landing
 import limits
+import logos
 import scout
 import styles
 from analyzer import MODEL, analyze_fit
@@ -116,7 +118,7 @@ def add_company_form() -> None:
             with st.spinner("Looking for a public job board…"):
                 board = job_sources.find_board(name.strip(), careers_url.strip())
             if board:
-                company_id = database.upsert_company(name.strip(), *board)
+                company_id = database.upsert_company(name.strip(), *board, website=careers_url.strip())
                 if database.add_user_company(user["id"], name.strip(), "", company_id, "tracking"):
                     st.success(f"Now tracking {name}.")
                 else:
@@ -124,6 +126,25 @@ def add_company_form() -> None:
             else:
                 st.error(f"Couldn't find a job board for {name}. We support companies hiring through "
                          "Greenhouse, Lever or Ashby. Try pasting a link to one of their job postings.")
+
+
+def ensure_logos(company_ids: list[int]) -> None:
+    """Look up logos for companies that haven't been checked yet (once per company, shared by all users)."""
+    missing = database.companies_missing_logo([cid for cid in company_ids if cid])
+    if not missing:
+        return
+    with st.spinner("Loading company logos…"), ThreadPoolExecutor(8) as pool:
+        found = list(pool.map(lambda c: logos.find_logo(c["name"], c["website"] or ""), missing))
+    for company, (domain, url) in zip(missing, found):
+        database.set_company_logo(company["id"], domain, url)
+
+
+def company_mark(name: str, logo_url: str | None, size: str = "") -> str:
+    """HTML for a company's logo, or a colored initial if it has none."""
+    if logo_url:
+        return f'<img class="logo {size}" src="{html.escape(logo_url)}" alt="">'
+    color = AVATAR_COLORS[sum(map(ord, name)) % len(AVATAR_COLORS)]
+    return f'<div class="avatar {size}" style="background:{color}">{html.escape(name[:1].upper())}</div>'
 
 
 def find_roles() -> None:
@@ -198,6 +219,7 @@ def roles_page() -> None:
                 st.rerun()
         return
 
+    ensure_logos([c["company_id"] for c in tracking])
     all_roles = database.list_scored_postings(user["id"], 0, ("new", "saved"))
     strong = [p for p in all_roles if p["fit_score"] >= profile.min_score]
     metrics = [("blue", f"Roles at {profile.min_score}+", len(strong)),
@@ -231,11 +253,12 @@ def role_card(p: dict) -> None:
     with st.container(border=True, key=f"role-{color}-{p['id']}"):
         info, actions = st.columns([5, 2], vertical_alignment="top")
         with info:
-            st.markdown(f"**{safe(p['title'])}**")
             meta = [p["company"], p["location"] or "Location not listed"]
             if p["posted_at"]:
                 meta.append(f"Posted {p['posted_at'][:10]}")
-            st.caption(" · ".join(meta))
+            st.html(f'<div class="role-head">{company_mark(p["company"], p["logo_url"], "small")}<div>'
+                    f'<div class="role-title">{html.escape(p["title"])}</div>'
+                    f'<div class="role-meta">{html.escape(" · ".join(meta))}</div></div></div>')
             fit_badge(p["fit_score"])
             st.markdown(safe(p["fit_reason"]))
         with actions, st.container(horizontal=True, horizontal_alignment="right", gap="small"):
@@ -272,6 +295,7 @@ def companies_page() -> None:
             status.update(label="Done", state="complete", expanded=False)
         st.rerun()
 
+    ensure_logos([c["company_id"] for c in database.list_user_companies(user["id"])])
     role_counts = Counter(p["company_id"] for p in database.list_scored_postings(user["id"], 0))
 
     suggested = database.list_user_companies(user["id"], "suggested")
@@ -314,9 +338,8 @@ def company_tiles(companies: list[dict], role_counts: Counter, suggested: bool =
 
 
 def company_tile(c: dict, roles: int, suggested: bool) -> None:
-    color = AVATAR_COLORS[sum(map(ord, c["name"])) % len(AVATAR_COLORS)]
     with st.container(border=True, key=f"tile-{c['id']}"):
-        st.html(f'<div class="avatar" style="background:{color}">{html.escape(c["name"][:1].upper())}</div>')
+        st.html(company_mark(c["name"], c["logo_url"]))
         st.markdown(f"**{c['name']}**")
         board = job_sources.board_page_url(c["ats"], c["ats_slug"])
         st.caption(f"[{ATS_NAMES[c['ats']]} job board]({board})")

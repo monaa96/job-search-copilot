@@ -24,7 +24,7 @@ We don't sell your information, use it for advertising, or share it with anyone 
 - **Anthropic** (Claude API): processes your resume and job descriptions to produce scores and analyses.
 - **Neon**: hosts the database where your information is stored.
 - **Streamlit Community Cloud** (Snowflake): hosts the app.
-- **Google**: provides sign-in.
+- **Google**: provides sign-in, and serves the company logos shown in the app (your browser loads these images from Google).
 
 ## Retention and deletion
 

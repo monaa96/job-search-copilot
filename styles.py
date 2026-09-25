@@ -26,6 +26,14 @@ CSS = """
   width: 3rem; height: 3rem; border-radius: 0.75rem; color: #FFFFFF;
   display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.25rem;
 }
+.logo {
+  width: 3rem; height: 3rem; border-radius: 0.75rem; object-fit: contain;
+  background: #FFFFFF; border: 1px solid #E2E6EE; padding: 0.35rem; box-sizing: border-box;
+}
+.logo.small, .avatar.small { width: 2.5rem; height: 2.5rem; font-size: 1rem; border-radius: 0.6rem; }
+.role-head { display: flex; align-items: center; gap: 0.75rem; }
+.role-title { font-weight: 600; font-size: 1.02rem; color: #131A2A; }
+.role-meta { color: #5B6475; font-size: 0.85rem; margin-top: 0.1rem; }
 .tile-why {
   color: #5B6475; font-size: 0.875rem; line-height: 1.4;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;

@@ -12,7 +12,7 @@ from pathlib import Path
 
 from sqlalchemy import (
     Boolean, Column, Date, DateTime, ForeignKey, Integer, LargeBinary, MetaData, String, Table, Text,
-    UniqueConstraint, create_engine, delete, func, select, true, update,
+    UniqueConstraint, create_engine, delete, func, inspect, select, text, true, update,
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -44,6 +44,8 @@ companies = Table(
     Column("name", String(200), nullable=False),
     Column("ats", String(20), nullable=False),
     Column("ats_slug", String(200), nullable=False),
+    Column("website", String(300)),
+    Column("logo_url", Text),  # NULL: not looked up yet; "": no logo found
     UniqueConstraint("ats", "ats_slug"),
 )
 
@@ -133,9 +135,22 @@ def engine() -> Engine:
             @event.listens_for(_engine, "connect")
             def _fk_on(dbapi_conn, _):
                 dbapi_conn.execute("PRAGMA foreign_keys = ON")
-        # Create any missing tables in whichever database we just connected to.
+        # Create any missing tables in whichever database we just connected to,
+        # then add columns introduced after a table was first created.
         metadata.create_all(_engine)
+        _add_missing_columns(_engine)
     return _engine
+
+
+def _add_missing_columns(eng: Engine) -> None:
+    inspector = inspect(eng)
+    with eng.begin() as conn:
+        for table in metadata.sorted_tables:
+            existing = {c["name"] for c in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name not in existing:
+                    col_type = column.type.compile(dialect=eng.dialect)
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {col_type}'))
 
 
 def init_db() -> None:
@@ -236,11 +251,24 @@ def delete_analysis(user_id: int, analysis_id: int) -> None:
 
 # --- Companies -----------------------------------------------------------------------
 
-def upsert_company(name: str, ats: str, ats_slug: str) -> int:
+def upsert_company(name: str, ats: str, ats_slug: str, website: str = "") -> int:
     with engine().begin() as conn:
-        conn.execute(_insert(companies).values(name=name, ats=ats, ats_slug=ats_slug).on_conflict_do_nothing())
+        conn.execute(_insert(companies).values(name=name, ats=ats, ats_slug=ats_slug, website=website or None)
+                     .on_conflict_do_nothing())
         return conn.execute(select(companies.c.id).where(
             companies.c.ats == ats, companies.c.ats_slug == ats_slug)).scalar_one()
+
+
+def companies_missing_logo(company_ids: list[int]) -> list[dict]:
+    with engine().connect() as conn:
+        return [dict(r) for r in conn.execute(select(companies).where(
+            companies.c.id.in_(company_ids), companies.c.logo_url.is_(None))).mappings()]
+
+
+def set_company_logo(company_id: int, website: str, logo_url: str) -> None:
+    with engine().begin() as conn:
+        conn.execute(update(companies).where(companies.c.id == company_id).values(
+            website=func.coalesce(companies.c.website, website or None), logo_url=logo_url))
 
 
 def add_user_company(user_id: int, name: str, why_it_fits: str, company_id: int | None, status: str) -> bool:
@@ -256,7 +284,7 @@ def add_user_company(user_id: int, name: str, why_it_fits: str, company_id: int 
 
 
 def list_user_companies(user_id: int, status: str | None = None) -> list[dict]:
-    query = (select(user_companies, companies.c.ats, companies.c.ats_slug)
+    query = (select(user_companies, companies.c.ats, companies.c.ats_slug, companies.c.logo_url)
              .select_from(user_companies.outerjoin(companies, companies.c.id == user_companies.c.company_id))
              .where(user_companies.c.user_id == user_id).order_by(user_companies.c.name))
     if status:
@@ -330,7 +358,8 @@ def add_user_postings(user_id: int, posting_ids: list[int]) -> int:
 
 def _user_posting_query(user_id: int):
     return (select(user_postings, postings.c.title, postings.c.location, postings.c.url, postings.c.description,
-                   postings.c.posted_at, postings.c.company_id, companies.c.name.label("company"))
+                   postings.c.posted_at, postings.c.company_id, companies.c.name.label("company"),
+                   companies.c.logo_url)
             .join(postings, postings.c.id == user_postings.c.posting_id)
             .join(companies, companies.c.id == postings.c.company_id)
             .where(user_postings.c.user_id == user_id, postings.c.is_open.is_(True)))

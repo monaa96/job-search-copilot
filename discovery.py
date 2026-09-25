@@ -26,6 +26,7 @@ class CompanySuggestion(BaseModel):
     name: str
     why_it_fits: str = Field(description="One sentence tying the company to the candidate's interests and background")
     careers_url: str = Field(description="URL of the company's careers or job board page, or empty string if unknown")
+    website: str = Field(description="The company's main website domain, e.g. ramp.com, or empty string if unknown")
 
 
 class CompanySuggestions(BaseModel):
@@ -52,7 +53,8 @@ For each company, find its careers page. Companies whose jobs are hosted on Gree
 (jobs.ashbyhq.com) are especially useful, because the app can track those automatically; \
 when you find such a job board link, give that link as the careers URL.
 
-Finish with a list: company name, one sentence on why it fits this candidate, and the careers URL."""
+Finish with a list: company name, its website domain, one sentence on why it fits this candidate, and \
+the careers URL."""
 
 
 def suggest_companies(
@@ -132,7 +134,7 @@ def discover_for_user(user: dict, log=print) -> tuple[int, int]:
 
     trackable = 0
     for company, board in zip(suggestions, boards):
-        company_id = database.upsert_company(company.name, *board) if board else None
+        company_id = database.upsert_company(company.name, *board, website=company.website) if board else None
         database.add_user_company(user["id"], company.name, company.why_it_fits, company_id,
                                   "suggested" if board else "unverified")
         trackable += bool(board)
