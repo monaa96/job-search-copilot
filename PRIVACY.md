@@ -28,7 +28,7 @@ We don't sell your information, use it for advertising, or share it with anyone 
 
 ## Retention and deletion
 
-Your information is kept until you delete it. You can permanently delete your resume, preferences, tracked companies, jobs and analyses at any time from the app's sidebar (**Delete my data**). Deletion is immediate and can't be undone.
+Your information is kept until you delete it. You can permanently delete your resume, preferences, tracked companies, jobs and analyses at any time under **Settings → Delete my data**. Deletion is immediate and can't be undone.
 
 ## Security
 
