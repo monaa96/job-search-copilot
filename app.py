@@ -3,8 +3,8 @@
 Run with:  streamlit run app.py
 
 With an [auth] section in .streamlit/secrets.toml, users sign in with Google
-and each gets their own data. Without one (plain local use), the app runs as a
-single local user.
+and each gets their own data. Without any secrets (plain local use), the app
+runs as a single local user.
 """
 
 import os
@@ -21,10 +21,12 @@ import scout
 from analyzer import MODEL, analyze_fit
 from discovery import discover_for_user
 from search_profile import SearchProfile
-from ui import render_analysis, show_errors
+from ui import fit_badge, page_header, render_analysis, safe, show_errors
 
-load_dotenv(Path(__file__).parent / ".env")
-st.set_page_config(page_title="Job Search Copilot", page_icon="🧭", layout="wide")
+ROOT = Path(__file__).parent
+load_dotenv(ROOT / ".env")
+st.set_page_config(page_title="Job Search Copilot", page_icon=str(ROOT / "static" / "icon.svg"), layout="wide")
+st.logo(str(ROOT / "static" / "logo.svg"), size="large")
 
 # On Streamlit Community Cloud, settings come from the app's Secrets instead of .env.
 # Single-user mode is only allowed when there are no secrets at all (plain local
@@ -39,83 +41,13 @@ except FileNotFoundError:
     HOSTED, AUTH_ENABLED = False, False
 
 
-
-def split_list(text: str) -> list[str]:
-    return [item.strip() for item in text.split(",") if item.strip()]
-
-
-def resume_uploader(user: dict, key: str) -> None:
-    uploaded = st.file_uploader("Upload your resume (PDF or text)", type=["pdf", "txt", "md"], key=f"{key}-file")
-    pasted = st.text_area("…or paste it here", height=200, key=f"{key}-text")
-    if st.button("Save resume", type="primary", disabled=not (uploaded or pasted.strip()), key=f"{key}-save"):
-        if uploaded is not None and uploaded.name.lower().endswith(".pdf"):
-            database.save_resume(user["id"], pdf=uploaded.getvalue())
-        elif uploaded is not None:
-            database.save_resume(user["id"], text=uploaded.getvalue().decode("utf-8", errors="ignore"))
-        else:
-            database.save_resume(user["id"], text=pasted)
-        st.rerun()
-
-
-def search_form(user: dict, profile: SearchProfile, submit_label: str) -> None:
-    with st.form("profile"):
-        include = st.text_input("Job titles you're looking for (comma-separated)",
-                                value=", ".join(profile.include_titles),
-                                help="A job must contain one of these in its title, e.g. Product Manager, Product Lead")
-        locations = st.text_input("Locations (comma-separated; leave blank for anywhere)",
-                                  value=", ".join(profile.locations), placeholder="e.g. New York, Remote")
-        interests = st.text_area("Industries and interests", value=profile.interests,
-                                 placeholder="e.g. AI developer tools, fintech, climate tech; mission-driven teams")
-        stage = st.text_input("Company stage / size", value=profile.company_stage,
-                              placeholder="e.g. Series B to public, 100–5,000 employees")
-        with st.expander("More options"):
-            exclude = st.text_input("Job titles to exclude (comma-separated)", value=", ".join(profile.exclude_titles))
-            min_score = st.slider("Minimum fit score for your daily list", 0, 100, profile.min_score, step=5)
-        if st.form_submit_button(submit_label, type="primary"):
-            database.save_profile(user["id"], SearchProfile(
-                interests=interests.strip(), company_stage=stage.strip(), locations=split_list(locations),
-                include_titles=split_list(include), exclude_titles=split_list(exclude), min_score=min_score,
-            ))
-            st.rerun()
-
-
-def add_company_form(user: dict) -> None:
-    with st.form("add-company", clear_on_submit=True):
-        name = st.text_input("Company name")
-        careers_url = st.text_input("Careers page URL (optional, helps find the job board)")
-        if st.form_submit_button("Add") and name.strip():
-            with st.spinner("Looking for a public job board…"):
-                board = job_sources.find_board(name.strip(), careers_url.strip())
-            if board:
-                company_id = database.upsert_company(name.strip(), *board)
-                if database.add_user_company(user["id"], name.strip(), "", company_id, "tracking"):
-                    st.success(f"Now tracking {name} ({board[0].title()}).")
-                else:
-                    st.warning(f"{name} is already on your list.")
-            else:
-                st.error(f"Couldn't find a Greenhouse, Lever or Ashby job board for {name}. "
-                         "Try pasting the link from one of their job postings as the careers URL.")
-
-
-def run_discovery(user: dict) -> None:
-    with show_errors(), st.status("Researching companies that fit you… (1–3 minutes)", expanded=True) as status:
-        trackable, total = discover_for_user(user, log=st.write)
-        status.update(label=f"{trackable} of {total} companies can be tracked automatically",
-                      state="complete", expanded=False)
-
-
-def run_scan(user: dict) -> None:
-    with show_errors(), st.status("Scanning job boards… (a few minutes the first time)", expanded=True) as status:
-        scout.run_scan([user["id"]], log=st.write)
-        status.update(label="Scan complete", state="complete", expanded=False)
-
-
-# --- Public pages -------------------------------------------------------------------------
+# --- Public pages ------------------------------------------------------------------------
 if st.query_params.get("page") == "privacy":
-    st.markdown((Path(__file__).parent / "PRIVACY.md").read_text())
+    _, center, _ = st.columns([1, 4, 1])
+    center.markdown((ROOT / "PRIVACY.md").read_text())
     st.stop()
 
-# --- Who is this? ---------------------------------------------------------------------
+# --- Who is this? --------------------------------------------------------------------------
 if HOSTED and not AUTH_ENABLED:
     landing.render(sign_in_available=False)
     st.stop()
@@ -129,178 +61,331 @@ else:
 
 profile = database.get_profile(user)
 has_resume = bool(user["resume_pdf"] or user["resume_text"])
-my_companies = database.list_user_companies(user["id"])
 
-# --- Sidebar: account --------------------------------------------------------------------
-with st.sidebar:
-    st.markdown(f"**{user['name'] or user['email']}**")
-    if AUTH_ENABLED:
-        st.caption(user["email"])
-        st.button("Sign out", on_click=st.logout)
 
-    if has_resume:
-        st.success(f"Resume saved ({'PDF' if user['resume_pdf'] else 'text'})")
-        with st.expander("Replace resume"):
-            resume_uploader(user, "sidebar")
+# --- Shared pieces -------------------------------------------------------------------------
 
-    st.markdown("**Today's usage**")
-    for kind, label in [("fit_checks", "Job fit checks"), ("analyses", "Full analyses"),
-                        ("discoveries", "Company searches")]:
-        st.caption(f"{label}: {limits.remaining(user, kind)} of {limits.daily_limit(user, kind)} left")
+def split_list(text: str) -> list[str]:
+    return [item.strip() for item in text.split(",") if item.strip()]
 
-    if AUTH_ENABLED:
-        with st.expander("Delete my data"):
-            st.caption("Permanently deletes your resume, searches, jobs and analyses.")
-            if st.checkbox("I understand this can't be undone") and st.button("Delete everything"):
-                database.delete_user(user["id"])
-                st.logout()
 
-st.title("🧭 AI Job Search Copilot")
-
-# --- First-run setup: resume → search → companies ------------------------------------------
-if not has_resume:
-    st.subheader("Step 1 of 3: Your resume")
-    st.caption("Used only to score jobs for you. You can delete it anytime.")
-    resume_uploader(user, "onboarding")
-    st.stop()
-
-if not user["profile_json"]:
-    st.subheader("Step 2 of 3: What are you looking for?")
-    search_form(user, profile, "Continue")
-    st.stop()
-
-if not my_companies:
-    st.subheader("Step 3 of 3: Companies to watch")
-    st.write("Claude will research companies that match your search and background, then check which "
-             "have public job boards it can scan daily. You'll approve the list before scanning starts.")
-    if st.button("🔍 Find companies for me", type="primary"):
-        run_discovery(user)
-        st.rerun()
-    with st.expander("…or add a company yourself"):
-        add_company_form(user)
-    st.stop()
-
-# --- Main tabs -------------------------------------------------------------------------------
-suggested = database.list_user_companies(user["id"], "suggested")
-tracking = database.list_user_companies(user["id"], "tracking")
-if suggested and not tracking:
-    st.info("**Almost there:** approve the companies you want to watch in the **🏢 Companies** tab, "
-            "then click **Scan now** in **🔎 Today's jobs**.")
-
-jobs_tab, companies_tab, match_tab, history_tab, search_tab = st.tabs(
-    ["🔎 Today's jobs", "🏢 Companies", "📝 Resume match", "📚 Saved analyses", "⚙️ My search"]
-)
-
-with jobs_tab:
-    top_left, top_right = st.columns([3, 1])
-    top_left.caption(f"Last scan: {user['last_scan']}" if user["last_scan"]
-                     else "No scans yet. New jobs are also checked automatically every morning.")
-    if top_right.button("Scan now", type="primary", disabled=not tracking, use_container_width=True):
-        run_scan(user)
+def resume_uploader(key: str) -> None:
+    uploaded = st.file_uploader("Upload your resume (PDF or text)", type=["pdf", "txt", "md"], key=f"{key}-file")
+    pasted = st.text_area("Or paste it", height=180, key=f"{key}-text")
+    if st.button("Save resume", type="primary", disabled=not (uploaded or pasted.strip()), key=f"{key}-save"):
+        if uploaded is not None and uploaded.name.lower().endswith(".pdf"):
+            database.save_resume(user["id"], pdf=uploaded.getvalue())
+        elif uploaded is not None:
+            database.save_resume(user["id"], text=uploaded.getvalue().decode("utf-8", errors="ignore"))
+        else:
+            database.save_resume(user["id"], text=pasted)
         st.rerun()
 
-    view = st.radio("Show", ["New & saved", "Saved only"], horizontal=True, label_visibility="collapsed")
-    show_below = st.checkbox(f"Include jobs scoring below {profile.min_score}")
-    statuses = ("saved",) if view == "Saved only" else ("new", "saved")
-    postings = database.list_scored_postings(user["id"], 0 if show_below else profile.min_score, statuses)
 
-    if not postings:
-        st.write("No jobs to show yet." if tracking else "Track some companies first.")
-    for p in postings:
-        star = "⭐ " if p["status"] == "saved" else ""
-        label = f"{star}**{p['fit_score']}** · {p['title']} — {p['company']} · {p['location'] or 'Location not listed'}"
-        with st.expander(label):
-            st.write(p["fit_reason"])
-            st.markdown(f"[View posting ↗]({p['url']})" + (f" · posted {p['posted_at'][:10]}" if p["posted_at"] else ""))
+def search_form(submit_label: str) -> None:
+    with st.form("profile", border=False):
+        include = st.text_input("Job titles", value=", ".join(profile.include_titles),
+                                help="Comma-separated. A role must contain one of these in its title.",
+                                placeholder="e.g. Product Manager, Product Lead")
+        locations = st.text_input("Locations", value=", ".join(profile.locations),
+                                  help="Comma-separated. Leave blank for anywhere.", placeholder="e.g. New York, Remote")
+        interests = st.text_area("Industries and interests", value=profile.interests, height=90,
+                                 placeholder="e.g. AI developer tools, fintech, climate tech")
+        stage = st.text_input("Company stage or size", value=profile.company_stage,
+                              placeholder="e.g. Series B to public")
+        with st.expander("More options"):
+            exclude = st.text_input("Exclude titles containing", value=", ".join(profile.exclude_titles))
+            min_score = st.slider("Minimum fit score to show", 0, 100, profile.min_score, step=5)
+        if st.form_submit_button(submit_label, type="primary"):
+            database.save_profile(user["id"], SearchProfile(
+                interests=interests.strip(), company_stage=stage.strip(), locations=split_list(locations),
+                include_titles=split_list(include), exclude_titles=split_list(exclude), min_score=min_score,
+            ))
+            st.rerun()
 
-            b1, b2, b3, _ = st.columns([1, 1, 1, 3])
+
+def add_company_form() -> None:
+    with st.form("add-company", clear_on_submit=True, border=False):
+        name = st.text_input("Company name")
+        careers_url = st.text_input("Careers page URL (optional)", help="Helps find the company's job board.")
+        if st.form_submit_button("Add company") and name.strip():
+            with st.spinner("Looking for a public job board…"):
+                board = job_sources.find_board(name.strip(), careers_url.strip())
+            if board:
+                company_id = database.upsert_company(name.strip(), *board)
+                if database.add_user_company(user["id"], name.strip(), "", company_id, "tracking"):
+                    st.success(f"Now tracking {name}.")
+                else:
+                    st.warning(f"{name} is already on your list.")
+            else:
+                st.error(f"Couldn't find a job board for {name}. We support companies hiring through "
+                         "Greenhouse, Lever or Ashby. Try pasting a link to one of their job postings.")
+
+
+def find_roles() -> None:
+    """Research companies, track every one with a job board, and scan them for roles."""
+    with show_errors(), st.status("Finding roles for you… this takes a few minutes", expanded=True) as status:
+        if not database.list_user_companies(user["id"], "suggested"):
+            st.write("Researching companies that match your search and background…")
+            discover_for_user(user, log=st.write)
+        for c in database.list_user_companies(user["id"], "suggested"):
+            database.set_user_company_status(user["id"], c["id"], "tracking")
+        st.write("Scanning their job boards and scoring each role against your resume…")
+        scout.run_scan([user["id"]], log=st.write, auto_analyze=False)
+        status.update(label="Done", state="complete", expanded=False)
+
+
+def refresh_roles() -> None:
+    with show_errors(), st.status("Checking for new roles…", expanded=True) as status:
+        scout.run_scan([user["id"]], log=st.write, auto_analyze=False)
+        status.update(label="Up to date", state="complete", expanded=False)
+
+
+# --- First-run setup ------------------------------------------------------------------------
+
+def onboarding() -> None:
+    step = 1 if not has_resume else 2 if not user["profile_json"] else 3
+    _, center, _ = st.columns([1, 3, 1])
+    with center:
+        st.space("small")
+        st.caption(f"STEP {step} OF 3")
+        st.progress(step / 3)
+        if step == 1:
+            st.markdown("## Start with your resume")
+            st.caption("It's used only to score roles for you, and you can delete it anytime.")
+            resume_uploader("onboarding")
+        elif step == 2:
+            st.markdown("## What are you looking for?")
+            st.caption("Titles and locations filter roles. Interests help find the right companies.")
+            search_form("Continue")
+        else:
+            st.markdown("## Let's find your roles")
+            st.markdown("We'll research companies that match your search and background, check their job "
+                        "boards, and rank every open role by how well it fits you.")
+            if st.button("Find roles for me", type="primary", icon=":material/travel_explore:"):
+                find_roles()
+                st.rerun()
+            with st.expander("Or start with companies you already have in mind"):
+                add_company_form()
+                if database.list_user_companies(user["id"], "tracking"):
+                    if st.button("Scan these companies"):
+                        refresh_roles()
+                        st.rerun()
+
+
+# --- Pages ------------------------------------------------------------------------------------
+
+def roles_page() -> None:
+    tracking = database.list_user_companies(user["id"], "tracking")
+    header, action = st.columns([4, 1], vertical_alignment="bottom")
+    with header:
+        page_header("Roles for you", user["last_scan"] and f"Last updated {user['last_scan']}"
+                    or "Updated automatically every morning")
+    if action.button("Check for new roles", icon=":material/refresh:", disabled=not tracking,
+                     use_container_width=True):
+        refresh_roles()
+        st.rerun()
+
+    suggested = database.list_user_companies(user["id"], "suggested")
+    if suggested and not tracking:
+        with st.container(border=True):
+            st.markdown(f"**We found {len(suggested)} companies that match you.** Scan them to see open roles.")
+            if st.button("Find roles at these companies", type="primary"):
+                find_roles()
+                st.rerun()
+        return
+
+    all_roles = database.list_scored_postings(user["id"], 0, ("new", "saved"))
+    strong = [p for p in all_roles if p["fit_score"] >= profile.min_score]
+    m1, m2, m3 = st.columns(3)
+    m1.metric(f"Roles at {profile.min_score}+", len(strong))
+    m2.metric("Saved", sum(p["status"] == "saved" for p in all_roles))
+    m3.metric("Companies watched", len(tracking))
+
+    view = st.segmented_control("View", ["Best matches", "Saved", "All roles"], default="Best matches",
+                                label_visibility="collapsed")
+    if view == "Saved":
+        roles = [p for p in all_roles if p["status"] == "saved"]
+    elif view == "All roles":
+        roles = all_roles
+    else:
+        roles = strong
+
+    if not roles:
+        if view == "Best matches" and all_roles:
+            st.info(f"No roles scored {profile.min_score}+ yet. {len(all_roles)} lower-scoring roles are "
+                    "under **All roles**, or you can lower the threshold in **Settings**.")
+        else:
+            st.caption("Nothing here yet.")
+    for p in roles:
+        role_card(p)
+
+
+def role_card(p: dict) -> None:
+    with st.container(border=True):
+        info, actions = st.columns([5, 2], vertical_alignment="top")
+        with info:
+            st.markdown(f"**{safe(p['title'])}**")
+            meta = [p["company"], p["location"] or "Location not listed"]
+            if p["posted_at"]:
+                meta.append(f"Posted {p['posted_at'][:10]}")
+            st.caption(" · ".join(meta))
+            fit_badge(p["fit_score"])
+            st.markdown(safe(p["fit_reason"]))
+        with actions, st.container(horizontal=True, horizontal_alignment="right", gap="small"):
+            st.link_button("View", p["url"], icon=":material/open_in_new:")
             if p["status"] == "saved":
-                if b1.button("Unsave", key=f"unsave-{p['id']}"):
+                if st.button("Saved", key=f"unsave-{p['id']}", icon=":material/bookmark:", type="primary"):
                     database.set_posting_status(user["id"], p["id"], "new")
                     st.rerun()
-            elif b1.button("⭐ Save", key=f"save-{p['id']}"):
+            elif st.button("Save", key=f"save-{p['id']}", icon=":material/bookmark_border:"):
                 database.set_posting_status(user["id"], p["id"], "saved")
                 st.rerun()
-            if b2.button("Dismiss", key=f"dismiss-{p['id']}"):
+            if st.button("", key=f"dismiss-{p['id']}", icon=":material/close:", help="Not interested"):
                 database.set_posting_status(user["id"], p["id"], "dismissed")
                 st.rerun()
-            if not p["analysis_id"] and b3.button("Full analysis", key=f"analyze-{p['id']}"):
-                with show_errors(), st.spinner("Analyzing… (about 30 seconds)"):
-                    scout.analyze_posting(user, p)
-                    st.rerun()
 
-            if p["analysis_id"] and (analysis := database.get_analysis(user["id"], p["analysis_id"])):
-                st.divider()
-                render_analysis(analysis)
+        if p["analysis_id"] and (analysis := database.get_analysis(user["id"], p["analysis_id"])):
+            with st.expander("Full analysis and resume suggestions"):
+                render_analysis(analysis, heading=False)
+        elif st.button("Get full analysis and resume suggestions", key=f"analyze-{p['id']}",
+                       icon=":material/auto_awesome:", type="tertiary"):
+            with show_errors(), st.spinner("Analyzing… about 30 seconds"):
+                scout.analyze_posting(user, p)
+                st.rerun()
 
-with companies_tab:
-    if st.button("🔍 Find more companies", disabled=not profile.interests and not profile.include_titles):
-        run_discovery(user)
+
+def companies_page() -> None:
+    header, action = st.columns([4, 1], vertical_alignment="bottom")
+    with header:
+        page_header("Companies", "The companies whose job boards are checked for you every morning.")
+    if action.button("Find more", icon=":material/travel_explore:", use_container_width=True):
+        with show_errors(), st.status("Researching companies… 1 to 3 minutes", expanded=True) as status:
+            discover_for_user(user, log=st.write)
+            status.update(label="Done", state="complete", expanded=False)
         st.rerun()
 
+    suggested = database.list_user_companies(user["id"], "suggested")
     if suggested:
-        st.subheader(f"Suggested ({len(suggested)}): approve the ones you want")
-        if st.button("Track all suggested"):
+        with st.container(border=True):
+            top, all_btn = st.columns([4, 1], vertical_alignment="center")
+            top.markdown(f"**{len(suggested)} new suggestions**")
+            if all_btn.button("Add all", use_container_width=True):
+                for c in suggested:
+                    database.set_user_company_status(user["id"], c["id"], "tracking")
+                st.rerun()
             for c in suggested:
-                database.set_user_company_status(user["id"], c["id"], "tracking")
-            st.rerun()
-        for c in suggested:
-            info, track, skip = st.columns([6, 1, 1])
-            info.markdown(f"**{c['name']}** — {c['why_it_fits']}  \n"
-                          f"[{c['ats'].title()} job board ↗]({job_sources.board_page_url(c['ats'], c['ats_slug'])})")
-            if track.button("Track", key=f"track-{c['id']}"):
-                database.set_user_company_status(user["id"], c["id"], "tracking")
-                st.rerun()
-            if skip.button("Skip", key=f"skip-{c['id']}"):
-                database.set_user_company_status(user["id"], c["id"], "rejected")
-                st.rerun()
+                company_row(c, suggested=True)
 
-    st.subheader(f"Tracking ({len(tracking)})")
+    tracking = database.list_user_companies(user["id"], "tracking")
+    st.markdown(f"#### Watching ({len(tracking)})")
     for c in tracking:
-        info, stop = st.columns([7, 1])
-        info.markdown(f"**{c['name']}** · [{c['ats'].title()} ↗]({job_sources.board_page_url(c['ats'], c['ats_slug'])})"
-                      + (f" — {c['why_it_fits']}" if c["why_it_fits"] else ""))
-        if stop.button("Stop", key=f"stop-{c['id']}"):
-            database.delete_user_company(user["id"], c["id"])
-            st.rerun()
+        company_row(c)
 
-    with st.expander("➕ Add a company yourself"):
-        add_company_form(user)
+    with st.expander("Add a company"):
+        add_company_form()
 
     unverified = database.list_user_companies(user["id"], "unverified")
     if unverified:
-        with st.expander(f"Suggested but not trackable ({len(unverified)})"):
-            st.caption("These companies use a hiring system without a public feed (often large companies "
-                       "with their own career sites). Check their careers pages yourself.")
+        with st.expander(f"Can't be tracked automatically ({len(unverified)})"):
+            st.caption("These companies don't publish a job feed we can read, often because they run their "
+                       "own career sites. Check their careers pages directly.")
             for c in unverified:
-                st.markdown(f"**{c['name']}** — {c['why_it_fits']}")
+                st.markdown(f"**{c['name']}**  \n{safe(c['why_it_fits'])}")
 
-with match_tab:
-    st.write("Paste any job description to see how your resume matches, and how to strengthen it for this role.")
-    job_description = st.text_area("Job description", height=300, placeholder="Paste the full job posting…")
-    if st.button("Analyze match", type="primary", disabled=not job_description.strip()):
-        with show_errors(), st.spinner("Comparing your experience to the role… (about 30 seconds)"):
+
+def company_row(c: dict, suggested: bool = False) -> None:
+    info, actions = st.columns([6, 2], vertical_alignment="center")
+    board = job_sources.board_page_url(c["ats"], c["ats_slug"])
+    info.markdown(f"**{c['name']}** · [Job board]({board})"
+                  + (f"  \n:gray[{safe(c['why_it_fits'])}]" if c["why_it_fits"] else ""))
+    with actions, st.container(horizontal=True, horizontal_alignment="right", gap="small"):
+        if suggested:
+            if st.button("Add", key=f"track-{c['id']}", type="primary"):
+                database.set_user_company_status(user["id"], c["id"], "tracking")
+                st.rerun()
+            if st.button("Skip", key=f"skip-{c['id']}"):
+                database.set_user_company_status(user["id"], c["id"], "rejected")
+                st.rerun()
+        elif st.button("Remove", key=f"stop-{c['id']}"):
+            database.delete_user_company(user["id"], c["id"])
+            st.rerun()
+
+
+def match_page() -> None:
+    page_header("Resume match", "Paste any job description to see how you match and how to tailor your resume.")
+    job_description = st.text_area("Job description", height=260, placeholder="Paste the full job posting…",
+                                   label_visibility="collapsed")
+    if st.button("Analyze", type="primary", icon=":material/auto_awesome:", disabled=not job_description.strip()):
+        with show_errors(), st.spinner("Comparing your experience to the role… about 30 seconds"):
             limits.require(user, "analyses")
             result = analyze_fit(job_description, resume_text=user["resume_text"], resume_pdf=user["resume_pdf"])
             limits.use(user, "analyses")
             database.save_analysis(user["id"], job_description, result, MODEL)
             st.session_state["latest"] = result
     if "latest" in st.session_state:
-        st.divider()
-        render_analysis(st.session_state["latest"])
+        with st.container(border=True):
+            render_analysis(st.session_state["latest"])
 
-with history_tab:
+
+def saved_analyses_page() -> None:
+    page_header("Analyses", "Every full analysis you've run.")
     saved = database.list_analyses(user["id"])
     if not saved:
-        st.write("No analyses yet.")
+        st.caption("No analyses yet. Run one from a role or from Resume match.")
     for row in saved:
-        label = f"{row['match_score']}% · {row['title']} — {row['company']} · {str(row['created_at'])[:10]}"
-        with st.expander(label):
-            render_analysis(row["result"])
-            if st.button("Delete", key=f"delete-{row['id']}"):
+        with st.expander(f"{row['title']} · {row['company']} · {row['match_score']}"):
+            render_analysis(row["result"], heading=False)
+            if st.button("Delete", key=f"delete-{row['id']}", type="tertiary", icon=":material/delete:"):
                 database.delete_analysis(user["id"], row["id"])
                 st.rerun()
 
-with search_tab:
-    search_form(user, profile, "Save")
-    st.caption("Changes to titles or locations apply on the next scan.")
+
+def settings_page() -> None:
+    page_header("Settings")
+    left, right = st.columns([3, 2], gap="large")
+    with left:
+        st.markdown("#### Your search")
+        search_form("Save changes")
+        st.caption("Title and location changes apply on the next update.")
+    with right:
+        st.markdown("#### Account")
+        with st.container(border=True):
+            st.markdown(f"**{user['name'] or 'Signed in'}**  \n:gray[{user['email']}]")
+            if AUTH_ENABLED:
+                st.button("Sign out", on_click=st.logout, icon=":material/logout:")
+
+        st.markdown("#### Resume")
+        with st.container(border=True):
+            st.markdown(f"Saved as {'PDF' if user['resume_pdf'] else 'text'}")
+            with st.expander("Replace resume"):
+                resume_uploader("settings")
+
+        st.markdown("#### Today's usage")
+        with st.container(border=True):
+            for kind, label in [("fit_checks", "Role scores"), ("analyses", "Full analyses"),
+                                ("discoveries", "Company searches")]:
+                used = limits.daily_limit(user, kind) - limits.remaining(user, kind)
+                st.progress(used / limits.daily_limit(user, kind),
+                            text=f"{label}: {used} of {limits.daily_limit(user, kind)}")
+
+        if AUTH_ENABLED:
+            with st.expander("Delete my data"):
+                st.caption("Permanently deletes your resume, searches, roles and analyses.")
+                if st.checkbox("I understand this can't be undone") and st.button("Delete everything",
+                                                                                   type="primary"):
+                    database.delete_user(user["id"])
+                    st.logout()
+
+
+# --- Routing ------------------------------------------------------------------------------------
+if not has_resume or not user["profile_json"] or not database.list_user_companies(user["id"]):
+    onboarding()
+else:
+    st.navigation([
+        st.Page(roles_page, title="Roles", icon=":material/work:", default=True),
+        st.Page(match_page, title="Resume match", icon=":material/fact_check:", url_path="match"),
+        st.Page(companies_page, title="Companies", icon=":material/apartment:", url_path="companies"),
+        st.Page(saved_analyses_page, title="Analyses", icon=":material/description:", url_path="analyses"),
+        st.Page(settings_page, title="Settings", icon=":material/settings:", url_path="settings"),
+    ], position="top").run()

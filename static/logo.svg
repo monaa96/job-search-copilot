@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="40" viewBox="0 0 220 40">
+  <rect x="2" y="4" width="32" height="32" rx="8" fill="#2451D6"/>
+  <path d="M11 26 L18 11 L25 26 L18 22 Z" fill="#FFFFFF"/>
+  <text x="44" y="26.5" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-size="17" font-weight="650" fill="#131A2A">Job Search Copilot</text>
+</svg>

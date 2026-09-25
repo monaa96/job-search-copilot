@@ -1,0 +1,20 @@
+[theme]
+base = "light"
+primaryColor = "#2451D6"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F6FA"
+textColor = "#131A2A"
+borderColor = "#E2E6EE"
+linkColor = "#2451D6"
+baseRadius = "0.625rem"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFontWeights = [700, 650, 600, 600, 600, 600]
+
+[client]
+toolbarMode = "minimal"
+
+[server]
+enableStaticServing = true
+
+[browser]
+gatherUsageStats = false

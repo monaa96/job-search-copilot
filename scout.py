@@ -25,7 +25,7 @@ import job_sources
 import limits
 from analyzer import MODEL, SCORING_GUIDE, analyze_fit, resume_block
 
-PARALLEL_REQUESTS = 4
+PARALLEL_REQUESTS = 6
 
 
 class QuickFit(BaseModel):
@@ -35,7 +35,8 @@ class QuickFit(BaseModel):
 
 QUICK_FIT_SYSTEM = """You screen job postings for a candidate. Given their resume and one \
 job posting, estimate how well they fit. Judge what the job actually requires against what \
-the candidate has done, not keyword overlap, and be candid rather than generous.
+the candidate has done, not keyword overlap, and be candid rather than generous. The \
+reason is shown to the candidate, so address them as "you".
 
 """ + SCORING_GUIDE
 
@@ -74,11 +75,17 @@ def analyze_posting(user: dict, posting: dict, client: anthropic.Anthropic | Non
     limits.use(user, "analyses")
     analysis_id = database.save_analysis(user["id"], _posting_text(posting), result, MODEL)
     database.set_posting_analysis(posting["id"], analysis_id)
+    # The full analysis is the more careful judgment, so its score replaces the quick one.
+    database.set_fit(posting["id"], result.match_score, posting["fit_reason"] or result.verdict)
     return analysis_id
 
 
-def run_scan(user_ids: list[int] | None = None, log: Callable[[str], None] = print) -> dict[int, str]:
+def run_scan(user_ids: list[int] | None = None, log: Callable[[str], None] = print,
+             auto_analyze: bool = True) -> dict[int, str]:
     """Scan tracked companies for the given users (default: everyone).
+
+    auto_analyze: also run full analyses on each user's top matches. The app
+    turns this off so an on-demand scan returns quickly.
 
     Returns {user_id: one-line summary}.
     """
@@ -96,7 +103,7 @@ def run_scan(user_ids: list[int] | None = None, log: Callable[[str], None] = pri
         try:
             jobs = job_sources.fetch_jobs(company["ats"], company["ats_slug"])
         except Exception as e:
-            log(f"⚠️ {company['name']}: couldn't fetch jobs ({e})")
+            log(f"Warning: {company['name']}: couldn't fetch jobs ({e})")
             continue
         matches = {uid: [j for j in jobs if profiles[uid].matches(j["title"], j["location"])]
                    for uid in company["user_ids"] if uid in users}
@@ -128,7 +135,7 @@ def run_scan(user_ids: list[int] | None = None, log: Callable[[str], None] = pri
     with ThreadPoolExecutor(PARALLEL_REQUESTS) as pool:
         for user, p, fit, error in pool.map(check, tasks):
             if error:
-                log(f"⚠️ Fit check failed for {p['title']} at {p['company']}: {error}")
+                log(f"Warning: Fit check failed for {p['title']} at {p['company']}: {error}")
                 continue
             limits.use(user, "fit_checks")
             if fit:
@@ -140,19 +147,20 @@ def run_scan(user_ids: list[int] | None = None, log: Callable[[str], None] = pri
         profile = profiles[uid]
         top = [p for p in database.list_scored_postings(uid, profile.min_score, ("new",)) if not p["analysis_id"]]
         budget = min(limits.AUTO_ANALYSES_PER_SCAN[limits.is_owner(user)], limits.remaining(user, "analyses"))
+        budget = budget if auto_analyze else 0
         for p in top[:budget]:
             log(f"Full analysis: {p['title']} at {p['company']} ({p['fit_score']})")
             try:
                 analyze_posting(user, p, client)
             except Exception as e:
-                log(f"⚠️ Full analysis failed for {p['title']}: {e}")
+                log(f"Warning: Full analysis failed for {p['title']}: {e}")
 
         in_list = len(database.list_scored_postings(uid, profile.min_score, ("new",)))
         waiting = database.count_postings_needing_fit_check(uid)
-        summary = (f"{datetime.now():%b %d, %I:%M %p}: {new_counts[uid]} new matching jobs, "
-                   f"{in_list} in your list at {profile.min_score}+")
+        summary = (f"{datetime.now():%b %d, %I:%M %p} · {new_counts[uid]} new roles, "
+                   f"{in_list} at {profile.min_score}+")
         if waiting:
-            summary += f", {waiting} more to check tomorrow"
+            summary += f" · {waiting} more to score next scan"
         database.set_last_scan(uid, summary)
         summaries[uid] = summary
     log(f"Scan finished for {len(users)} user(s).")

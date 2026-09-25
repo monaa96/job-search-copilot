@@ -85,6 +85,8 @@ from the resume. Never invent experience the resume doesn't contain.
 use the employer's vocabulary for things the candidate actually did, and surface buried \
 metrics. Only use facts already in the resume; never add skills, numbers or experience it \
 doesn't contain. Don't try to paper over gaps with wording.
+- The candidate reads this themselves, so address them as "you" rather than by name \
+or as "the candidate".
 - Be candid about gaps. An inflated score is useless to someone deciding where to spend \
 their application time.
 

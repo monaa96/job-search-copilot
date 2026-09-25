@@ -10,24 +10,39 @@ from ui import render_analysis
 SAMPLES = Path(__file__).parent / "sample_data"
 REPO_URL = "https://github.com/monaa96/job-search-copilot"
 
+FEATURES = [
+    (":material/travel_explore:", "Finds companies for you",
+     "Researches companies that match your interests and background, then watches their job boards."),
+    (":material/insights:", "Ranks every new role",
+     "Each morning, new openings are scored against your resume, so the best fits rise to the top."),
+    (":material/edit_note:", "Tailors your resume",
+     "For any role, see where you're strong, what's missing, and exactly how to reword your resume."),
+]
+
 
 def render(sign_in_available: bool = True) -> None:
-    st.title("🧭 AI Job Search Copilot")
-    st.markdown("#### Your AI job scout: new roles that fit you, every morning.")
+    st.space("medium")
+    _, center, _ = st.columns([1, 6, 1])
+    with center:
+        st.markdown("# Find the roles you're actually a fit for")
+        st.markdown("Job Search Copilot scans the companies that match you every day, ranks new openings "
+                    "against your resume, and shows you how to stand out for each one.")
+        if sign_in_available:
+            st.button("Sign in with Google", type="primary", icon=":material/login:", on_click=st.login)
+            st.caption(f"Free to use, with daily limits. You can delete your data anytime. "
+                       f"[Privacy](?page=privacy) · [How it's built]({REPO_URL})")
+        else:
+            st.info("Sign-ups are opening soon.")
 
-    steps = st.columns(3)
-    steps[0].markdown("**1. Tell it about you**  \nUpload your resume and say what roles and companies interest you.")
-    steps[1].markdown("**2. It finds and scans**  \nAI researches matching companies, then checks their job boards daily.")
-    steps[2].markdown("**3. You get a ranked list**  \nEach new role is scored against your resume, with specific resume edits.")
+        st.space("large")
+        for col, (icon, title, text) in zip(st.columns(3, gap="medium"), FEATURES):
+            with col, st.container(border=True, height="stretch"):
+                st.markdown(f"#### {icon}")
+                st.markdown(f"**{title}**")
+                st.caption(text)
 
-    if sign_in_available:
-        st.button("Sign in with Google to get started", type="primary", on_click=st.login)
-    else:
-        st.info("Sign-ups open soon. Meanwhile, see an example analysis below.")
-    st.caption(f"Free to try, with daily usage limits. Your resume is only used to score jobs for you, "
-               f"and you can delete your data anytime. [Privacy policy](?page=privacy) · [How it works ↗]({REPO_URL})")
-
-    st.divider()
-    st.subheader("Example: a full fit analysis")
-    st.caption("A real output for a fictional candidate and job.")
-    render_analysis(JobFitAnalysis.model_validate_json((SAMPLES / "sample_analysis.json").read_text()))
+        st.space("large")
+        st.markdown("### See an example")
+        st.caption("A real analysis for a fictional candidate and role.")
+        with st.container(border=True):
+            render_analysis(JobFitAnalysis.model_validate_json((SAMPLES / "sample_analysis.json").read_text()))

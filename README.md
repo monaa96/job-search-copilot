@@ -34,7 +34,7 @@ If a candidate gets a short, ranked list of new roles each morning, each with an
    Verify each has a public job feed      ← software check (Greenhouse / Lever / Ashby APIs)
                    │
                    ▼
-   User approves which to track           ← human judgment
+   Track every verified company           ← user can add, remove or re-run discovery anytime
                    │
                    ▼
  ┌──────────────────────────────────┐
@@ -46,7 +46,7 @@ If a candidate gets a short, ranked list of new roles each morning, each with an
  └──────────────────────────────────┘
                    │
                    ▼
-   Today's jobs: ranked by fit; save, dismiss, or analyze
+   Roles: ranked by fit; save, dismiss, or get a full analysis with resume suggestions
 ```
 
 **Stack:** Python · Claude API (structured outputs, web search) · Streamlit (UI and Google sign-in) · Postgres in the cloud / SQLite locally, via SQLAlchemy · GitHub Actions for the daily scan
@@ -70,7 +70,7 @@ If a candidate gets a short, ranked list of new roles each morning, each with an
 
 **Agent where the path is unpredictable, workflow where cost and reliability matter.** Finding companies is open-ended, so an agent decides what to search and when it has enough. Scanning hundreds of jobs a day needs predictable cost and behavior, so it's a fixed pipeline with AI judgment only inside specific steps.
 
-**AI proposes, software verifies, the human decides.** The discovery agent can suggest companies that don't fit or get details wrong. Each suggestion is checked against a real job feed before it's shown, and nothing is tracked until the user approves it.
+**AI proposes, software verifies, the user stays in control.** The discovery agent can suggest companies that don't fit or get details wrong, so each suggestion is checked against a real job feed before it's used. Early versions asked users to approve every company before scanning, but users wanted to see roles, not companies, so setup now goes straight from "what are you looking for" to a ranked list of roles, and companies can be pruned or added afterwards.
 
 **A cost funnel.** Free filters run first, a cheap quick check scores only *new* jobs, and the expensive full analysis runs only on the top few. Each scan has hard caps, and jobs over the cap wait for the next scan rather than being dropped.
 
