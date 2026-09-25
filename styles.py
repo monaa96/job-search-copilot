@@ -10,6 +10,28 @@ FIT_COLORS = {"green": "#16A34A", "blue": "#2451D6", "orange": "#EA7A0C", "gray"
 
 CSS = """
 <style>
+/* White cards on the tinted page background */
+[class*="st-key-card-"], [class*="st-key-role-"], [class*="st-key-feature-"], [class*="st-key-tile-"],
+[data-testid="stExpander"] details {
+  background: #FFFFFF;
+  box-shadow: 0 1px 2px rgba(19, 26, 42, 0.05);
+}
+.st-key-card-onboarding { padding: 2rem 2.25rem; margin-top: 2rem; }
+[data-testid="stHeader"] { background: #FFFFFF; border-bottom: 1px solid #E2E6EE; }
+
+/* Company tiles */
+[class*="st-key-tile-"] { transition: box-shadow 0.15s ease, transform 0.15s ease; }
+[class*="st-key-tile-"]:hover { box-shadow: 0 6px 18px rgba(19, 26, 42, 0.08); transform: translateY(-1px); }
+.avatar {
+  width: 3rem; height: 3rem; border-radius: 0.75rem; color: #FFFFFF;
+  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.25rem;
+}
+.tile-why {
+  color: #5B6475; font-size: 0.875rem; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  min-height: 3.7em;
+}
+
 /* Landing page hero */
 .st-key-hero {
   background: linear-gradient(135deg, #2451D6 0%, #5B3FD9 55%, #8B3FD0 100%);
@@ -38,10 +60,13 @@ CSS = """
 .st-key-feature-teal h4 { background: #E3F7F2; color: #0F8A6A; }
 
 /* Tinted metric cards */
-[class*="st-key-metric-"] { border-radius: 0.875rem; padding: 0.9rem 1.1rem; }
-.st-key-metric-blue { background: #EEF2FF; }
-.st-key-metric-green { background: #EAF7EE; }
-.st-key-metric-violet { background: #F3EEFF; }
+[class*="st-key-metric-"] {
+  background: #FFFFFF; border-radius: 0.875rem; padding: 0.9rem 1.1rem;
+  border: 1px solid #E2E6EE; border-top-width: 4px; box-shadow: 0 1px 2px rgba(19, 26, 42, 0.05);
+}
+.st-key-metric-blue { border-top-color: #2451D6; }
+.st-key-metric-green { border-top-color: #16A34A; }
+.st-key-metric-violet { border-top-color: #6D3FD9; }
 .st-key-metric-blue [data-testid="stMetricValue"] { color: #2451D6; }
 .st-key-metric-green [data-testid="stMetricValue"] { color: #16A34A; }
 .st-key-metric-violet [data-testid="stMetricValue"] { color: #6D3FD9; }

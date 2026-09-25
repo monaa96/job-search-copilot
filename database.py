@@ -330,7 +330,7 @@ def add_user_postings(user_id: int, posting_ids: list[int]) -> int:
 
 def _user_posting_query(user_id: int):
     return (select(user_postings, postings.c.title, postings.c.location, postings.c.url, postings.c.description,
-                   postings.c.posted_at, companies.c.name.label("company"))
+                   postings.c.posted_at, postings.c.company_id, companies.c.name.label("company"))
             .join(postings, postings.c.id == user_postings.c.posting_id)
             .join(companies, companies.c.id == postings.c.company_id)
             .where(user_postings.c.user_id == user_id, postings.c.is_open.is_(True)))

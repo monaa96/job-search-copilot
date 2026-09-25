@@ -45,5 +45,5 @@ def render(sign_in_available: bool = True) -> None:
         st.space("large")
         st.markdown("### See an example")
         st.caption("A real analysis for a fictional candidate and role.")
-        with st.container(border=True):
+        with st.container(border=True, key="card-example"):
             render_analysis(JobFitAnalysis.model_validate_json((SAMPLES / "sample_analysis.json").read_text()))

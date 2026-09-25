@@ -7,7 +7,9 @@ and each gets their own data. Without any secrets (plain local use), the app
 runs as a single local user.
 """
 
+import html
 import os
+from collections import Counter
 from pathlib import Path
 
 import streamlit as st
@@ -148,8 +150,7 @@ def refresh_roles() -> None:
 def onboarding() -> None:
     step = 1 if not has_resume else 2 if not user["profile_json"] else 3
     _, center, _ = st.columns([1, 3, 1])
-    with center:
-        st.space("small")
+    with center, st.container(border=True, key="card-onboarding"):
         st.caption(f"STEP {step} OF 3")
         st.progress(step / 3)
         if step == 1:
@@ -190,7 +191,7 @@ def roles_page() -> None:
 
     suggested = database.list_user_companies(user["id"], "suggested")
     if suggested and not tracking:
-        with st.container(border=True):
+        with st.container(border=True, key="card-suggested"):
             st.markdown(f"**We found {len(suggested)} companies that match you.** Scan them to see open roles.")
             if st.button("Find roles at these companies", type="primary"):
                 find_roles()
@@ -271,23 +272,24 @@ def companies_page() -> None:
             status.update(label="Done", state="complete", expanded=False)
         st.rerun()
 
+    role_counts = Counter(p["company_id"] for p in database.list_scored_postings(user["id"], 0))
+
     suggested = database.list_user_companies(user["id"], "suggested")
     if suggested:
-        with st.container(border=True):
-            top, all_btn = st.columns([4, 1], vertical_alignment="center")
-            top.markdown(f"**{len(suggested)} new suggestions**")
-            if all_btn.button("Add all", use_container_width=True):
-                for c in suggested:
-                    database.set_user_company_status(user["id"], c["id"], "tracking")
-                st.rerun()
+        top, all_btn = st.columns([4, 1], vertical_alignment="bottom")
+        top.markdown(f"#### Suggested for you ({len(suggested)})")
+        if all_btn.button("Add all", type="primary", use_container_width=True):
             for c in suggested:
-                company_row(c, suggested=True)
+                database.set_user_company_status(user["id"], c["id"], "tracking")
+            st.rerun()
+        company_tiles(suggested, role_counts, suggested=True)
+        st.space("medium")
 
     tracking = database.list_user_companies(user["id"], "tracking")
     st.markdown(f"#### Watching ({len(tracking)})")
-    for c in tracking:
-        company_row(c)
+    company_tiles(tracking, role_counts)
 
+    st.space("medium")
     with st.expander("Add a company"):
         add_company_form()
 
@@ -300,22 +302,39 @@ def companies_page() -> None:
                 st.markdown(f"**{c['name']}**  \n{safe(c['why_it_fits'])}")
 
 
-def company_row(c: dict, suggested: bool = False) -> None:
-    info, actions = st.columns([6, 2], vertical_alignment="center")
-    board = job_sources.board_page_url(c["ats"], c["ats_slug"])
-    info.markdown(f"**{c['name']}** · [Job board]({board})"
-                  + (f"  \n:gray[{safe(c['why_it_fits'])}]" if c["why_it_fits"] else ""))
-    with actions, st.container(horizontal=True, horizontal_alignment="right", gap="small"):
-        if suggested:
-            if st.button("Add", key=f"track-{c['id']}", type="primary"):
-                database.set_user_company_status(user["id"], c["id"], "tracking")
+AVATAR_COLORS = ["#2451D6", "#5B3FD9", "#0F8A6A", "#D9480F", "#C2255C", "#1C7ED6", "#7048E8", "#2B8A3E"]
+ATS_NAMES = {"greenhouse": "Greenhouse", "lever": "Lever", "ashby": "Ashby"}
+
+
+def company_tiles(companies: list[dict], role_counts: Counter, suggested: bool = False, per_row: int = 3) -> None:
+    for start in range(0, len(companies), per_row):
+        for col, c in zip(st.columns(per_row, gap="medium"), companies[start:start + per_row]):
+            with col:
+                company_tile(c, role_counts.get(c["company_id"], 0), suggested)
+
+
+def company_tile(c: dict, roles: int, suggested: bool) -> None:
+    color = AVATAR_COLORS[sum(map(ord, c["name"])) % len(AVATAR_COLORS)]
+    with st.container(border=True, key=f"tile-{c['id']}"):
+        st.html(f'<div class="avatar" style="background:{color}">{html.escape(c["name"][:1].upper())}</div>')
+        st.markdown(f"**{c['name']}**")
+        board = job_sources.board_page_url(c["ats"], c["ats_slug"])
+        st.caption(f"[{ATS_NAMES[c['ats']]} job board]({board})")
+        st.html(f'<div class="tile-why">{html.escape(c["why_it_fits"] or "Added by you")}</div>')
+        if not suggested:
+            label = f"{roles} role{'s' if roles != 1 else ''} for you"
+            st.badge(label, color="blue" if roles else "gray", icon=":material/work:")
+        with st.container(horizontal=True, gap="small"):
+            if suggested:
+                if st.button("Add", key=f"track-{c['id']}", type="primary", icon=":material/add:"):
+                    database.set_user_company_status(user["id"], c["id"], "tracking")
+                    st.rerun()
+                if st.button("Skip", key=f"skip-{c['id']}"):
+                    database.set_user_company_status(user["id"], c["id"], "rejected")
+                    st.rerun()
+            elif st.button("Remove", key=f"stop-{c['id']}", type="tertiary", icon=":material/close:"):
+                database.delete_user_company(user["id"], c["id"])
                 st.rerun()
-            if st.button("Skip", key=f"skip-{c['id']}"):
-                database.set_user_company_status(user["id"], c["id"], "rejected")
-                st.rerun()
-        elif st.button("Remove", key=f"stop-{c['id']}"):
-            database.delete_user_company(user["id"], c["id"])
-            st.rerun()
 
 
 def match_page() -> None:
@@ -331,7 +350,7 @@ def match_page() -> None:
             database.save_analysis(user["id"], job_description, result, MODEL)
             st.session_state["latest"] = result
     if "latest" in st.session_state:
-        with st.container(border=True):
+        with st.container(border=True, key="card-analysis"):
             render_analysis(st.session_state["latest"])
 
 
@@ -357,19 +376,19 @@ def settings_page() -> None:
         st.caption("Title and location changes apply on the next update.")
     with right:
         st.markdown("#### Account")
-        with st.container(border=True):
+        with st.container(border=True, key="card-account"):
             st.markdown(f"**{user['name'] or 'Signed in'}**  \n:gray[{user['email']}]")
             if AUTH_ENABLED:
                 st.button("Sign out", on_click=st.logout, icon=":material/logout:")
 
         st.markdown("#### Resume")
-        with st.container(border=True):
+        with st.container(border=True, key="card-resume"):
             st.markdown(f"Saved as {'PDF' if user['resume_pdf'] else 'text'}")
             with st.expander("Replace resume"):
                 resume_uploader("settings")
 
         st.markdown("#### Today's usage")
-        with st.container(border=True):
+        with st.container(border=True, key="card-usage"):
             for kind, label in [("fit_checks", "Role scores"), ("analyses", "Full analyses"),
                                 ("discoveries", "Company searches")]:
                 used = limits.daily_limit(user, kind) - limits.remaining(user, kind)

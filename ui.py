@@ -91,8 +91,8 @@ def render_analysis(a: JobFitAnalysis, heading: bool = True) -> None:
 
     if a.resume_edits:
         st.markdown("##### Resume suggestions for this role")
-        for edit in a.resume_edits:
-            with st.container(border=True):
+        for i, edit in enumerate(a.resume_edits):
+            with st.container(border=True, key=f"card-edit-{id(a)}-{i}"):
                 st.caption("Current")
                 st.markdown(safe(edit.original))
                 st.caption("Suggested")
