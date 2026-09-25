@@ -25,7 +25,7 @@ def render(sign_in_available: bool = True) -> None:
     else:
         st.info("Sign-ups open soon. Meanwhile, see an example analysis below.")
     st.caption(f"Free to try, with daily usage limits. Your resume is only used to score jobs for you, "
-               f"and you can delete your data anytime. [How it works ↗]({REPO_URL})")
+               f"and you can delete your data anytime. [Privacy policy](?page=privacy) · [How it works ↗]({REPO_URL})")
 
     st.divider()
     st.subheader("Example: a full fit analysis")

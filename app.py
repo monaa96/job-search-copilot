@@ -118,6 +118,11 @@ def run_scan(user: dict) -> None:
         status.update(label="Scan complete", state="complete", expanded=False)
 
 
+# --- Public pages -------------------------------------------------------------------------
+if st.query_params.get("page") == "privacy":
+    st.markdown((Path(__file__).parent / "PRIVACY.md").read_text())
+    st.stop()
+
 # --- Who is this? ---------------------------------------------------------------------
 if HOSTED and not AUTH_ENABLED:
     landing.render(sign_in_available=False)
