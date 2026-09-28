@@ -1,159 +1,157 @@
-# AI Job Search Copilot
+# Job Search Copilot
 
-> Which jobs am I actually a fit for, why, what am I missing, and what should I do about it?
+Finding a job is a job in itself. Job Search Copilot finds roles that fit you, shows exactly what stands between you and each one, and gives you a concrete plan to land it.
 
-An AI job scout. Sign in, upload your resume, say what you're looking for, and it:
-
-1. **Finds companies** that match your interests and background, using an AI agent that researches the web
-2. **Scans their job boards every morning** for new roles that match your target titles and locations
-3. **Scores every new job against your resume** and ranks your daily list by fit
-4. **Gives you a plan to land each role**: a clear recommendation (apply now, apply with a referral, or look at adjacent roles), a checklist of concrete actions (resume edits, skills to build with specific projects, a referral to find, the story to lead with), and adjacent roles where you may be even more competitive
-5. **Finds your warm path in**: import your LinkedIn connections, and each role shows who you know at the company, ranked by who can help most, with a drafted referral ask
-6. **Coaches you on the skills that matter**: across every role you've analyzed, it finds the gaps that keep coming up and gives you a learning plan and a proof project for each
-
-<!-- TODO: add screenshots of Today's jobs, Companies, and a full analysis (use sample data) -->
+- Live app: [job-search-copilot.lovable.app](https://job-search-copilot.lovable.app)
+- This repository: the Python backend (AI analysis, job scanning, data and API)
+- Frontend: a React app built with Lovable, which calls the API described in [docs/api-contract.md](docs/api-contract.md)
 
 ## The problem
 
-Job seekers repeat the same manual work every day: check a dozen career pages, skim postings, read each job description against their experience, guess whether they're competitive, and figure out what's missing. It's slow and inconsistent, and job boards match on keywords, when what matters is whether your *experience* meets what the role *requires*.
+Job seekers repeat the same manual work every day. They check a dozen career pages, skim postings, read each job description against their own experience, guess whether they are competitive, and try to figure out what is missing. Job boards help with finding roles, and resume tools help with matching keywords, but neither answers the questions that matter most:
+
+- Which of these roles am I actually competitive for?
+- What exactly is missing between my background and this role?
+- What should I do about it, and who could help me get in?
+
+## Who it's for
+
+People in an active job search, especially career switchers and people moving up a level, who need to spend their limited time on the right roles. It was built first for product managers, which is my own search.
+
+## What it does
+
+The product covers three stages: find, diagnose and act.
+
+**Find**
+- You describe what you want (titles, locations, industries, company stage) and upload your resume.
+- An AI agent researches companies that fit your interests and background, then checks which ones publish a job feed the app can read.
+- Every morning, the app scans those companies' job boards for new roles that match your titles and locations.
+- You can filter roles by posting date and sort by best fit or most recent.
+
+**Diagnose**
+- Every new role gets a fit score from 0 to 100 against your resume, with one sentence explaining the deciding factor.
+- For any role, a full analysis shows where you are strong (with evidence from your resume), what is missing (ranked critical, important or nice to have) and what to emphasize.
+- Across every role you have analyzed, the app finds the skill gaps that keep coming up, so you can see patterns instead of one job at a time.
+
+**Act**
+- Each role gets a plan to land it: a recommendation (apply now, apply with a tailored resume, apply with a referral, or look at adjacent roles first) and a checklist you can track.
+- Resume suggestions rewrite your existing bullets in the language of the role, without adding anything your resume does not support.
+- If you import your LinkedIn connections, each role shows who you know at the company, ranked by who can help most, and drafts a referral message for you to send.
+- Adjacent roles suggest related titles where you may be even more competitive, matched to real open postings.
+- A skills plan gives you a learning plan and a small proof project for each recurring gap.
 
 ## Product hypothesis
 
-If a candidate gets a short, ranked list of new roles each morning, each with an honest, evidence-backed fit assessment, they'll spend their time on roles where they're competitive and tailor each application to what that role cares about.
+If a job seeker gets a short, ranked list of new roles each morning, with an honest assessment and a concrete plan for each one, they will apply to fewer roles, apply to the right ones, and get more interviews because they arrive with a tailored resume and a referral.
 
 ## How it works
 
-```text
- "My search": interests, stage, locations, titles
-                   │
-                   ▼
- ┌──────────────────────────────────┐
- │ Company discovery (agentic)      │  Claude + web search decides what to research
- │                                  │  and returns companies with a "why it fits you"
- └──────────────────────────────────┘
-                   │
-                   ▼
-   Verify each has a public job feed      ← software check (Greenhouse / Lever / Ashby APIs)
-                   │
-                   ▼
-   Track every verified company           ← user can add, remove or re-run discovery anytime
-                   │
-                   ▼
- ┌──────────────────────────────────┐
- │ Daily scan (workflow, 8am)       │
- │  fetch all open jobs      free   │
- │  keyword filter           free   │
- │  quick AI fit check       cheap  │  new jobs only, capped per scan
- │  full analysis            $$     │  top matches only
- └──────────────────────────────────┘
-                   │
-                   ▼
-   Roles: ranked by fit; save, dismiss, or get a full analysis with resume suggestions
-```
-
-**Stack:** Python · Claude API (structured outputs, web search) · Streamlit (UI and Google sign-in) · Postgres in the cloud / SQLite locally, via SQLAlchemy · GitHub Actions for the daily scan
-
-| File | Role |
-|---|---|
-| `app.py` | Streamlit interface: sign-in, first-run setup, and the main tabs |
-| `landing.py` | The page visitors see before signing in |
-| `analyzer.py` | Full fit analysis and resume suggestions: prompt, output schema, and the Claude call |
-| `discovery.py` | Company discovery: web research, then structured extraction and verification |
-| `job_sources.py` | Finds a company's job board and fetches its postings |
-| `scout.py` | The daily scan pipeline, for one user or all users |
-| `database.py` | Users, companies, postings, analyses and usage; SQLite or Postgres |
-| `referrals.py` | Parses LinkedIn's connections export, matches people to companies, ranks who to ask, drafts the message |
-| `coaching.py` | Groups skill gaps across roles into themes and writes a learning plan for each |
-| `plans.py` | Turns an analysis into a recommendation, a plan checklist, and real adjacent openings |
-| `limits.py` | Per-user daily usage limits |
-| `search_profile.py` | A user's search preferences |
-| `.github/workflows/daily-scan.yml` | Runs the scan for every user each morning |
-| `schedule_daily_scan.sh` | Alternative: schedules the scan on your own Mac |
-| `sample_data/` | Fictional resume, job description and analysis |
+1. Company discovery: Claude researches companies that match the user's interests, using web search, and returns each one with a reason it fits this person.
+2. Verification: the app checks each company for a public job feed (Greenhouse, Lever or Ashby). Companies without one are listed separately so the user can check them manually.
+3. Daily scan: a scheduled job fetches every open role at the companies each user watches, applies that user's title and location filters, and stores the matches.
+4. Quick fit check: each new role is scored against the user's resume with a short AI call. Unscored roles still appear right away, labeled as not scored yet.
+5. Full analysis: when the user opens a role, a deeper AI analysis produces the strengths, gaps, resume edits and adjacent roles, and the app turns that into a recommendation and checklist.
+6. Referrals and coaching: connections are matched to companies in code, and the AI drafts outreach messages and cross-role learning plans on request.
 
 ## Key product and technical decisions
 
-**Agent where the path is unpredictable, workflow where cost and reliability matter.** Finding companies is open-ended, so an agent decides what to search and when it has enough. Scanning hundreds of jobs a day needs predictable cost and behavior, so it's a fixed pipeline with AI judgment only inside specific steps.
+**Use an agent only where the path is unpredictable.** Finding companies is open-ended, so an agent decides what to search for and when it has enough. Scoring hundreds of roles a day needs predictable cost and behavior, so that part is a fixed pipeline with AI judgment only inside specific steps.
 
-**AI proposes, software verifies, the user stays in control.** The discovery agent can suggest companies that don't fit or get details wrong, so each suggestion is checked against a real job feed before it's used. Early versions asked users to approve every company before scanning, but users wanted to see roles, not companies, so setup now goes straight from "what are you looking for" to a ranked list of roles, and companies can be pruned or added afterwards.
+**AI proposes, software verifies, the user decides.** The discovery agent can suggest companies that do not fit or get details wrong, so every suggestion is checked against a real job feed before it is used, and users can remove or add companies at any time.
 
-**A cost funnel.** Free filters run first, a cheap quick check scores only *new* jobs, and the expensive full analysis runs only on the top few. Each scan has hard caps, and jobs over the cap wait for the next scan rather than being dropped.
+**Official job feeds instead of scraping.** Greenhouse, Lever and Ashby publish public job feeds that companies expect to be read. Scraping LinkedIn or Indeed would break their terms and break often. The tradeoff is coverage: companies that run their own career sites, such as Apple and Amazon, cannot be tracked automatically yet.
 
-**Official job feeds, not scraping.** Greenhouse, Lever and Ashby publish public job feeds. Scraping LinkedIn or Indeed would violate their terms, break often, and get blocked. The tradeoff: companies with their own hiring systems (often the largest ones) can't be tracked automatically, so they're shown separately for manual follow-up.
+**Trust the source for dates.** The app uses each company's own publish date. Early on, it used the "last updated" date for some boards, which made months-old roles look new because companies edit postings often. That was a real user complaint, and fixing it made the date filter trustworthy.
 
-**Structured outputs instead of free text.** Every AI step returns data in a fixed schema (`match_score`, `strong_matches`, `skill_gaps`, …), so results can be ranked, stored, and later aggregated across jobs. The schema is the product spec for "what a useful fit assessment contains."
+**A cost funnel.** Free keyword filters run first, a cheap quick check scores only new roles, and the expensive full analysis runs only when someone opens a role. The newest roles are scored first, so each day's budget goes to fresh postings.
 
-**Evidence required, calibrated scores.** Every strength must cite a specific role on the resume, and invented experience is forbidden. Both the quick check and the full analysis share one written scoring rubric, so a 75 means the same thing everywhere.
+**Structured outputs instead of free text.** Every AI step returns data in a fixed schema, so results can be ranked, stored, compared across roles and turned into checklists. The schema is effectively the product spec for what a useful fit assessment contains.
 
-**Shared where it's public, private where it's personal.** Companies and job postings are shared across users, so a board is fetched once no matter how many people track it. Resumes, searches, scores and analyses are per user, and users can delete all their data from the app. PDFs go straight to the model, so there's no resume-parsing code.
+**Honest by design.** Every strength must cite a specific role on the resume, and resume suggestions may only reword what is already there. The quick check and the full analysis share one scoring rubric, so a 75 means the same thing everywhere.
 
-**Cost controls for a public app.** Every user has daily limits on fit checks, full analyses and company searches (owners get higher limits), on top of the account-level spending cap. The cost of adding a user is bounded and predictable.
+**Referrals without scraping or spam.** Connections come from LinkedIn's official data export. The app stores names, companies, titles and profile links, discards email addresses, never contacts anyone, and only drafts messages for the user to review and send.
 
-**Plans assembled by rules, judgment by AI.** The AI decides what the gaps are and which adjacent roles make sense; plain code turns that into the recommendation and checklist, and matches suggested role types to real open postings. The plan is instant, free and consistent, and every adjacent-role suggestion points to a job that actually exists.
+**Cost controls for a public app.** Every user has daily limits on scoring, analyses, company searches, drafted messages and skills reports, with higher limits for the owner. The cost of each new user is bounded and predictable.
 
-**Referrals without scraping or spam.** Connections come from LinkedIn's official data export, not scraping. Only names, companies, titles and profile links are stored (emails are discarded), they're visible only to the user, and the app never contacts anyone: it drafts a message the user reviews and sends.
+## Architecture
 
-**Patterns across roles, not just one role.** Because every analysis is stored as structured data, the app can look across all of a user's target roles at once. One AI call groups differently worded gaps into themes and ranks them by how many roles need them, which turns a pile of per-job feedback into a single, prioritized learning plan.
+| Layer | Technology | Notes |
+|---|---|---|
+| Frontend | React, TypeScript, Tailwind (built with Lovable) | Hosted by Lovable |
+| API | Python, FastAPI | Hosted on Render |
+| AI | Claude API | Structured outputs, web search |
+| Database | Postgres (Neon) | SQLite for local development |
+| Sign-in | Google | Signed session tokens issued by the API |
+| Daily scan | GitHub Actions | Runs every morning for all users |
 
-**Resume suggestions that can't lie.** Each analysis rewrites 3–5 existing resume lines in the employer's vocabulary. The prompt forbids adding skills, numbers or experience the resume doesn't contain.
+Long actions, such as finding roles or building a skills report, run as background jobs. The frontend polls for progress and shows each step as it happens, which avoids request timeouts and keeps the user informed.
 
-**Fail-safe hosting.** If the hosted app's sign-in isn't configured, it only shows the public landing page, so visitors can never end up sharing an account.
+### Files in this repository
+
+| File | What it does |
+|---|---|
+| `api.py` | The REST API used by the frontend, including sign-in and background jobs |
+| `analyzer.py` | Full fit analysis: the prompt, the output schema and the Claude call |
+| `scout.py` | The daily scan: fetch, filter, quick fit check and optional full analyses |
+| `discovery.py` | Company discovery with web search, then extraction and verification |
+| `job_sources.py` | Finds a company's job board and reads its postings |
+| `plans.py` | Turns an analysis into a recommendation, a checklist and adjacent openings |
+| `referrals.py` | Reads LinkedIn's connections file, matches people to companies, drafts messages |
+| `coaching.py` | Groups skill gaps across roles into themes with learning plans |
+| `database.py` | Users, companies, postings, analyses, connections and usage |
+| `limits.py` | Per-user daily usage limits |
+| `logos.py` | Company logos |
+| `docs/api-contract.md` | The contract between the frontend and the API |
+| `.github/workflows/daily-scan.yml` | The scheduled daily scan |
+| `render.yaml` | Hosting configuration for the API |
+| `app.py`, `ui.py`, `styles.py`, `landing.py` | The original Streamlit prototype, still runnable locally |
 
 ## Running it locally
 
-Requires Python 3.10+ and an [Anthropic API key](https://console.anthropic.com). Locally, the app runs as a single user with a SQLite database, with no sign-in needed.
+You need Python 3.10 or newer and an [Anthropic API key](https://console.anthropic.com).
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # then paste your API key into .env
-streamlit run app.py
+cp .env.example .env
 ```
 
-Then follow the in-app setup: resume → what you're looking for → companies → **Scan now**.
-
-To scan automatically every morning on your own Mac:
+Add your API key to `.env`, then start the API with local sign-in enabled:
 
 ```bash
-./schedule_daily_scan.sh          # daily at 8:00; or e.g. ./schedule_daily_scan.sh 7 30
-./schedule_daily_scan.sh remove   # turn it off
+DEV_LOGIN=1 uvicorn api:app --reload --port 8000
 ```
 
-## Deploying the public version
+Locally the API uses a SQLite file in `data/`. The original Streamlit prototype also still runs with `streamlit run app.py`.
 
-1. **Database:** create a free Postgres database (e.g. [Neon](https://neon.tech)) and copy its connection string.
-2. **Google sign-in:** in Google Cloud Console, create an OAuth client (type "Web application") with the redirect URI `https://<your-app>.streamlit.app/oauth2callback`.
-3. **Streamlit Community Cloud:** deploy `app.py` from this repo, with these Secrets:
-   ```toml
-   ANTHROPIC_API_KEY = "..."
-   DATABASE_URL = "postgresql://..."
-   OWNER_EMAILS = "you@example.com"
+## Deploying
 
-   [auth]
-   redirect_uri = "https://<your-app>.streamlit.app/oauth2callback"
-   cookie_secret = "<a long random string>"
-   client_id = "..."
-   client_secret = "..."
-   server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
-   ```
-4. **Daily scan:** add `ANTHROPIC_API_KEY`, `DATABASE_URL` and `OWNER_EMAILS` as GitHub repository secrets. The workflow in `.github/workflows/daily-scan.yml` then runs every morning, and can be triggered manually from the Actions tab.
+- API: deploy to Render with `render.yaml`, and set `ANTHROPIC_API_KEY`, `DATABASE_URL`, `OWNER_EMAILS`, `SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `API_BASE_URL` and `FRONTEND_ORIGINS`.
+- Google sign-in: add `<API_BASE_URL>/api/auth/callback` as an authorized redirect URI.
+- Daily scan: add `ANTHROPIC_API_KEY`, `DATABASE_URL` and `OWNER_EMAILS` as GitHub repository secrets.
+- Frontend: point its API base URL at the deployed API.
 
-**Cost:** a full analysis costs a few cents. Company discovery costs roughly $0.50–1 per run because of web search. After the first scan, daily scans only process new postings.
+## Privacy
+
+Resumes, searches, connections and results are private to each user, and users can delete all of their data from the app. The full policy is in [PRIVACY.md](PRIVACY.md) and on the live site.
+
+## What I learned building it
+
+- Real use beats planning. Several of the most important changes came from using the app for my own search: people wanted to see roles, not a list of companies to approve; long-open roles looked new because of a date bug; and adding a company did nothing until the next day.
+- Data quality is a product problem. A wrong posting date made a correct feature feel broken. Checking the source data directly was faster than guessing.
+- The hard part of AI features is making the output trustworthy. Fixed schemas, a shared scoring rubric, required evidence and rules against invented experience mattered more than the prompt wording.
+- Coverage is a real tradeoff. Official job feeds are reliable and legitimate but miss large companies with their own career sites. That gap is now the top item on the roadmap.
 
 ## Roadmap
 
-1. ✅ **Job-fit analyzer**: resume + job description → structured analysis
-2. ✅ **Company discovery and daily job scan**
-3. ✅ **Public multi-user version**: Google sign-in, per-user data and limits, cloud daily scan, resume suggestions
-4. ✅ **Plan to land it**: per-role recommendation, action checklist with progress, adjacent roles matched to real openings
-5. ✅ **Referrals**: import your LinkedIn connections export; each role shows who you know at the company and drafts the ask
-6. ✅ **Skill coaching**: a dashboard of the skills you're missing most often across your target roles, with a learning plan for each
-7. **Redesigned frontend**: a React frontend (Lovable or hand-built) on top of this Python backend, served as an API
-8. **Application tracker**: status per role (applied → interviewing → offer), contacts and follow-ups, building on the plan checklist
-9. **Learns from your choices**: use save/dismiss history and outcomes to improve suggestions and scoring
-10. **Email digest**: "5 new matches for you" each morning
+- Coverage for large companies that run their own career sites, starting with a direct link to their search results and then a Workday connector or a licensed job data source
+- A "first seen" date for roles whose company does not publish one, and a signal for roles that have been open a long time
+- Adding many companies at once by pasting a list
+- An application tracker with applied, interviewing and offer stages, contacts and follow-ups, building on the plan checklist
+- Learning from your choices: using saves, dismissals and outcomes to improve suggestions and scoring
+- A morning email with your new matches
 
-## Tradeoffs and what I learned
+## How it was built
 
-<!-- TODO: fill in after using it on your real search: where scores were right or wrong, what you changed, and why -->
+I designed the product, made the scoping and tradeoff decisions, and tested it in my own job search. The code was written with AI coding tools: Claude Code for the backend and the AI features, and Lovable for the frontend.
