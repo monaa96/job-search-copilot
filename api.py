@@ -12,6 +12,7 @@ Settings (environment variables):
   DEV_LOGIN=1           local development only: enables /api/auth/dev-login without Google
 """
 
+import io
 import os
 import re
 import threading
@@ -21,6 +22,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
 
+import docx
 from authlib.integrations.starlette_client import OAuth
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
@@ -292,15 +294,36 @@ async def put_resume(file: UploadFile | None = File(None), text: str | None = Fo
                      user: dict = Depends(current_user)):
     if file is not None:
         data = await file.read()
-        if (file.filename or "").lower().endswith(".pdf"):
+        name = (file.filename or "").lower()
+        if name.endswith(".pdf"):
             database.save_resume(user["id"], pdf=data)
-        else:
+        elif name.endswith(".docx"):
+            database.save_resume(user["id"], text=_docx_text(data))
+        elif name.endswith((".txt", ".md")):
             database.save_resume(user["id"], text=data.decode("utf-8", errors="ignore"))
+        else:
+            raise HTTPException(400, "Upload your resume as a PDF, Word (.docx) or text file.")
     elif text and text.strip():
         database.save_resume(user["id"], text=text)
     else:
         raise HTTPException(400, "Upload a resume file or paste its text.")
     return me_out(user)
+
+
+def _docx_text(data: bytes) -> str:
+    """Plain text from a Word document, including text inside tables."""
+    try:
+        doc = docx.Document(io.BytesIO(data))
+    except Exception:
+        raise HTTPException(400, "That Word file couldn't be read. Try saving it as a PDF.")
+    lines = [p.text for p in doc.paragraphs]
+    for table in doc.tables:
+        for row in table.rows:
+            lines.append(" | ".join(cell.text for cell in row.cells))
+    text = "\n".join(line for line in lines if line.strip())
+    if not text.strip():
+        raise HTTPException(400, "That Word file looks empty. Try saving it as a PDF.")
+    return text
 
 
 @app.get("/api/search")
