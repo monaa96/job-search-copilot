@@ -209,11 +209,13 @@ def me_out(user: dict) -> dict:
 
 
 def role_out(p: dict, connections: list[dict]) -> dict:
-    label, color = plans.fit_label(p["fit_score"] or 0)
+    scored = p["fit_score"] is not None
+    label, color = plans.fit_label(p["fit_score"]) if scored else ("Not scored yet", "gray")
     return {
         "id": p["id"], "title": p["title"], "company": p["company"], "company_id": p["company_id"],
         "logo_url": p["logo_url"] or None, "location": p["location"], "posted_at": p["posted_at"], "url": p["url"],
-        "fit_score": p["fit_score"] or 0, "fit_color": color, "fit_label": label, "fit_reason": p["fit_reason"] or "",
+        "fit_score": p["fit_score"], "fit_color": color, "fit_label": label,
+        "fit_reason": p["fit_reason"] or ("" if scored else "This role will be scored against your resume in the next update."),
         "status": p["status"], "has_plan": bool(p["analysis_id"]),
         "known_people": sum(referrals.same_company(c["company"], p["company"]) for c in connections),
     }
@@ -255,7 +257,7 @@ def role_detail(user: dict, role_id: int) -> dict:
 def companies_out(user: dict) -> dict:
     ensure_logos(user)
     rows = database.list_user_companies(user["id"])
-    role_counts = Counter(p["company_id"] for p in database.list_scored_postings(user["id"], 0))
+    role_counts = Counter(p["company_id"] for p in database.list_user_roles(user["id"]))
     connections = database.list_connections(user["id"])
 
     def one(c):
@@ -357,13 +359,14 @@ def get_roles(view: str = "best", posted_within: int | None = None, sort: str = 
     ensure_logos(user)
     profile = database.get_profile(user)
     connections = database.list_connections(user["id"])
-    all_roles = database.list_scored_postings(user["id"], 0, ("new", "saved"))
+    all_roles = database.list_user_roles(user["id"])
+    strong = [p for p in all_roles if p["fit_score"] is not None and p["fit_score"] >= profile.min_score]
     if view == "saved":
         roles = [p for p in all_roles if p["status"] == "saved"]
     elif view == "all":
         roles = all_roles
     else:
-        roles = [p for p in all_roles if p["fit_score"] >= profile.min_score]
+        roles = strong
     if company_id:
         roles = [p for p in roles if p["company_id"] == company_id]
     if posted_within:
@@ -371,8 +374,8 @@ def get_roles(view: str = "best", posted_within: int | None = None, sort: str = 
         roles = [p for p in roles if (posted := _posted(p)) and posted >= cutoff]
     if sort == "recent":
         oldest = datetime.min.replace(tzinfo=timezone.utc)
-        roles.sort(key=lambda p: (_posted(p) or oldest, p["fit_score"]), reverse=True)
-    return {"stats": {"strong_count": sum(p["fit_score"] >= profile.min_score for p in all_roles),
+        roles.sort(key=lambda p: (_posted(p) or oldest, p["fit_score"] or 0), reverse=True)
+    return {"stats": {"strong_count": len(strong),
                       "saved_count": sum(p["status"] == "saved" for p in all_roles),
                       "companies_watched": len(database.list_user_companies(user["id"], "tracking")),
                       "min_score": profile.min_score},
@@ -511,7 +514,10 @@ def add_company(body: CompanyIn, user: dict = Depends(current_user)):
     company_id = database.upsert_company(name, *board, website=body.careers_url.strip())
     if not database.add_user_company(user["id"], name, "", company_id, "tracking"):
         raise HTTPException(409, f"{name} is already on your list.")
-    return next(c for c in companies_out(user)["watching"] if c["name"].lower() == name.lower())
+    company = next(c for c in companies_out(user)["watching"] if c["name"].lower() == name.lower())
+    # Check the new company's job board now rather than waiting for the morning scan.
+    scan = start_job(user, lambda log: {"summary": scout.run_scan([user["id"]], log=log, auto_analyze=False)[user["id"]]})
+    return {**company, "scan_job_id": scan["job_id"]}
 
 
 @app.post("/api/companies/{row_id}/status")

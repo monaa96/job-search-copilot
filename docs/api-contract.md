@@ -32,7 +32,8 @@ type SearchProfile = {
 type RoleSummary = {
   id: number; title: string; company: string; company_id: number; logo_url: string | null;
   location: string; posted_at: string | null; url: string;
-  fit_score: number; fit_color: FitColor; fit_label: string;   // e.g. 88, "green", "Strong fit"
+  fit_score: number | null; fit_color: FitColor; fit_label: string;   // e.g. 88, "green", "Strong fit";
+                                            // null, "gray", "Not scored yet" until the role is scored
   fit_reason: string;
   status: "new" | "saved" | "dismissed";
   has_plan: boolean; known_people: number;
@@ -40,7 +41,8 @@ type RoleSummary = {
 
 type RolesResponse = {
   stats: { strong_count: number; saved_count: number; companies_watched: number; min_score: number };
-  roles: RoleSummary[];                     // filtered by ?view=best|saved|all, best fit first
+  roles: RoleSummary[];                     // filtered by ?view=best|saved|all, best fit first;
+                                            // "all"/"saved" include unscored roles (listed last)
 };
 
 type StrongMatch = { skill: string; evidence: string };
@@ -120,7 +122,7 @@ type SavedAnalysis = { id: number; title: string; company: string; match_score: 
 | `POST /api/roles/{id}/add-title` | `{ title }` | `SearchProfile`: adds an adjacent role title to the search |
 | `GET /api/companies` | | `CompaniesResponse` |
 | `POST /api/companies/discover` | | *job* → `CompaniesResponse` (~2 min) |
-| `POST /api/companies` | `{ name, careers_url? }` | `Company` or 404 if no job board found |
+| `POST /api/companies` | `{ name, careers_url? }` | `Company & { scan_job_id }` (a job scanning the new company right away), or 404 if no job board found |
 | `POST /api/companies/{id}/status` | `{ status: "tracking" \| "rejected" }` | `CompaniesResponse` |
 | `DELETE /api/companies/{id}` | | `CompaniesResponse` |
 | `POST /api/match` | `{ job_description }` | *job* → `Analysis` (~40s) |

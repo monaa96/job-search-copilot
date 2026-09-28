@@ -430,6 +430,14 @@ def list_scored_postings(user_id: int, min_score: int, statuses: tuple[str, ...]
         return [dict(r) for r in conn.execute(query).mappings()]
 
 
+def list_user_roles(user_id: int, statuses: tuple[str, ...] = ("new", "saved")) -> list[dict]:
+    """All of a user's open roles, including ones not scored yet (best fit first, unscored last)."""
+    query = (_user_posting_query(user_id).where(user_postings.c.status.in_(statuses))
+             .order_by(user_postings.c.fit_score.desc().nulls_last(), user_postings.c.first_seen.desc()))
+    with engine().connect() as conn:
+        return [dict(r) for r in conn.execute(query).mappings()]
+
+
 def get_user_posting(user_id: int, user_posting_id: int) -> dict | None:
     query = _user_posting_query(user_id).where(user_postings.c.id == user_posting_id)
     with engine().connect() as conn:
