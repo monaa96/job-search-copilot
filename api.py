@@ -259,7 +259,7 @@ def companies_out(user: dict) -> dict:
     connections = database.list_connections(user["id"])
 
     def one(c):
-        return {"id": c["id"], "name": c["name"], "logo_url": c["logo_url"] or None,
+        return {"id": c["id"], "company_id": c["company_id"], "name": c["name"], "logo_url": c["logo_url"] or None,
                 "board_name": {"greenhouse": "Greenhouse", "lever": "Lever", "ashby": "Ashby"}.get(c["ats"]),
                 "board_url": job_sources.board_page_url(c["ats"], c["ats_slug"]) if c["ats"] else None,
                 "why_it_fits": c["why_it_fits"], "open_roles": role_counts.get(c["company_id"], 0),
@@ -350,9 +350,10 @@ def _posted(p: dict) -> datetime | None:
 
 @app.get("/api/roles")
 def get_roles(view: str = "best", posted_within: int | None = None, sort: str = "fit",
-              user: dict = Depends(current_user)):
+              company_id: int | None = None, user: dict = Depends(current_user)):
     """posted_within: only roles posted in the last N days (roles without a date are hidden).
-    sort: "fit" (best fit first) or "recent" (newest first)."""
+    sort: "fit" (best fit first) or "recent" (newest first).
+    company_id: only roles at this company (Company.company_id)."""
     ensure_logos(user)
     profile = database.get_profile(user)
     connections = database.list_connections(user["id"])
@@ -363,6 +364,8 @@ def get_roles(view: str = "best", posted_within: int | None = None, sort: str = 
         roles = all_roles
     else:
         roles = [p for p in all_roles if p["fit_score"] >= profile.min_score]
+    if company_id:
+        roles = [p for p in roles if p["company_id"] == company_id]
     if posted_within:
         cutoff = datetime.now(timezone.utc) - timedelta(days=posted_within)
         roles = [p for p in roles if (posted := _posted(p)) and posted >= cutoff]

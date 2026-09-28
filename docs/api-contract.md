@@ -77,6 +77,7 @@ type RoleDetail = {
 
 type Company = {
   id: number;                               // the user's company entry
+  company_id: number | null;                // the company itself; use with GET /api/roles?company_id=
   name: string; logo_url: string | null;
   board_name: string | null; board_url: string | null;   // e.g. "Ashby", link to its job board
   why_it_fits: string; open_roles: number; known_people: number;
@@ -108,7 +109,7 @@ type SavedAnalysis = { id: number; title: string; company: string; match_score: 
 | `DELETE /api/me` | | Deletes all of the user's data |
 | `PUT /api/resume` | multipart form: `file` (PDF/txt) **or** `text` field | `Me` |
 | `GET /api/search` · `PUT /api/search` | `SearchProfile` | `SearchProfile` |
-| `GET /api/roles?view=best\|saved\|all&posted_within=<days>&sort=fit\|recent` | | `RolesResponse`. `posted_within` hides roles older than N days (and roles with no posting date); `sort=recent` puts the newest first |
+| `GET /api/roles?view=best\|saved\|all&posted_within=<days>&sort=fit\|recent` | | `RolesResponse`. `posted_within` hides roles older than N days (and roles with no posting date); `sort=recent` puts the newest first; `company_id` limits to one company |
 | `POST /api/roles/refresh` | | *job* → `{ summary }`: checks tracked companies for new roles |
 | `POST /api/roles/find` | | *job* → `{ summary }`: first run: discover companies, track them, scan (3–5 min) |
 | `GET /api/roles/{id}` | | `RoleDetail` |
