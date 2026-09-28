@@ -6,6 +6,7 @@ import anthropic
 import streamlit as st
 
 from analyzer import AnalysisError, JobFitAnalysis
+from plans import fit_label
 
 IMPORTANCE_BADGE = {"critical": ("Critical", "red"), "important": ("Important", "orange"),
                     "nice-to-have": ("Nice to have", "gray")}
@@ -31,17 +32,6 @@ def show_errors():
 def safe(text: str) -> str:
     """Escape AI-written text for st.markdown, which treats $...$ as math."""
     return (text or "").replace("$", "\\$")
-
-
-def fit_label(score: int) -> tuple[str, str]:
-    """(label, badge color) for a fit score, matching the scoring rubric."""
-    if score >= 85:
-        return "Strong fit", "green"
-    if score >= 70:
-        return "Good fit", "blue"
-    if score >= 50:
-        return "Stretch", "orange"
-    return "Long shot", "gray"
 
 
 def fit_badge(score: int) -> None:

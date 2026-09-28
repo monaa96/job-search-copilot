@@ -27,6 +27,17 @@ class PlanStep:
     detail: str
 
 
+def fit_label(score: int) -> tuple[str, str]:
+    """(label, color) for a fit score, matching the scoring rubric."""
+    if score >= 85:
+        return "Strong fit", "green"
+    if score >= 70:
+        return "Good fit", "blue"
+    if score >= 50:
+        return "Stretch", "orange"
+    return "Long shot", "gray"
+
+
 def recommendation(score: int, company: str) -> Recommendation:
     if score >= 85:
         return Recommendation("Apply now", "You're a strong fit. Tailor your resume and apply while the role is fresh.",
