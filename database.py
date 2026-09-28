@@ -107,6 +107,20 @@ analyses = Table(
     Column("created_at", DateTime, server_default=func.now()),
 )
 
+# A user's LinkedIn connections (from LinkedIn's data export), for referrals.
+# Emails are deliberately not stored.
+connections = Table(
+    "connections", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("name", String(200), nullable=False),
+    Column("company", String(300), nullable=False),
+    Column("position", String(300), nullable=False, server_default=""),
+    Column("url", String(500), nullable=False, server_default=""),
+    Column("connected_on", String(40), nullable=False, server_default=""),
+    Column("imported_at", DateTime, server_default=func.now()),
+)
+
 # Per-user daily counters for rate limits.
 usage = Table(
     "usage", metadata,
@@ -433,3 +447,22 @@ def open_postings_at(company_ids: list[int]) -> list[dict]:
              .where(postings.c.company_id.in_(company_ids), postings.c.is_open.is_(True)))
     with engine().connect() as conn:
         return [dict(r) for r in conn.execute(query).mappings()]
+
+
+# --- Connections -------------------------------------------------------------------------
+
+def replace_connections(user_id: int, people: list[dict]) -> None:
+    with engine().begin() as conn:
+        conn.execute(delete(connections).where(connections.c.user_id == user_id))
+        if people:
+            conn.execute(connections.insert(), [{"user_id": user_id, **p} for p in people])
+
+
+def list_connections(user_id: int) -> list[dict]:
+    with engine().connect() as conn:
+        return [dict(r) for r in conn.execute(select(connections).where(connections.c.user_id == user_id)).mappings()]
+
+
+def delete_connections(user_id: int) -> None:
+    with engine().begin() as conn:
+        conn.execute(delete(connections).where(connections.c.user_id == user_id))

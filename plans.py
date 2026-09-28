@@ -43,7 +43,9 @@ def recommendation(score: int, company: str) -> Recommendation:
                           "gray")
 
 
-def build_plan(a: JobFitAnalysis, company: str) -> list[PlanStep]:
+def build_plan(a: JobFitAnalysis, company: str, contacts: list | None = None,
+               has_connections: bool = False) -> list[PlanStep]:
+    """contacts: ranked referrals.Contact list for this company (best first)."""
     steps = []
     if a.resume_edits:
         steps.append(PlanStep("resume", "resume", f"Tailor your resume ({len(a.resume_edits)} edits)",
@@ -52,9 +54,18 @@ def build_plan(a: JobFitAnalysis, company: str) -> list[PlanStep]:
     # skills_to_build is already ranked by impact on this candidate's chances.
     for i, s in enumerate(a.skills_to_build[:3]):
         steps.append(PlanStep(f"skill-{i}", "skill", f"Build: {s.skill}", s.how))
-    steps.append(PlanStep("referral", "referral", f"Find a referral at {company}",
-                          "Ask someone you know at the company to refer you or share context on the team. "
-                          "Referral matching from your LinkedIn connections is coming next."))
+    if contacts:
+        best = contacts[0]
+        steps.append(PlanStep("referral", "referral", f"Ask {best.name} for a referral",
+                              f"{best.position} at {company}. {best.why}. Draft a message under "
+                              "**People you know**."))
+    elif has_connections:
+        steps.append(PlanStep("referral", "referral", f"Find a path into {company}",
+                              "None of your LinkedIn connections work here. Look for alumni from your school or "
+                              "past companies, or ask a connection who knows someone on the team."))
+    else:
+        steps.append(PlanStep("referral", "referral", f"Find a referral at {company}",
+                              "Import your LinkedIn connections in **Settings** to see who you know here."))
     if a.what_to_emphasize:
         steps.append(PlanStep("story", "story", "Prepare your story", a.what_to_emphasize[0]))
     steps.append(PlanStep("apply", "apply", "Apply", "Submit your application with the tailored resume."))
