@@ -15,6 +15,7 @@ LIMITS = {
     "analyses":       (3,       30),   # full fit analyses per day (manual + automatic)
     "discoveries":    (1,       10),   # company discovery runs per day
     "messages":       (10,      50),   # referral messages drafted per day
+    "coaching":       (2,       10),   # skill coaching reports per day
 }
 AUTO_ANALYSES_PER_SCAN = {False: 1, True: 3}
 
@@ -45,6 +46,6 @@ class LimitReached(RuntimeError):
 def require(user: dict, kind: str) -> None:
     if remaining(user, kind) <= 0:
         label = {"analyses": "full analyses", "discoveries": "company searches", "fit_checks": "fit checks",
-                 "messages": "drafted messages"}[kind]
+                 "messages": "drafted messages", "coaching": "skills reports"}[kind]
         raise LimitReached(f"You've reached today's limit of {daily_limit(user, kind)} {label}. "
                            "It resets tomorrow.")

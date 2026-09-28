@@ -16,6 +16,7 @@ from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 
+import coaching
 import database
 import job_sources
 import landing
@@ -515,6 +516,86 @@ def company_tile(c: dict, roles: int, suggested: bool) -> None:
                 st.rerun()
 
 
+PRIORITY_BADGE = {"high": ("High priority", "red"), "medium": ("Medium priority", "orange"),
+                  "low": ("Lower priority", "gray")}
+
+
+def skills_page() -> None:
+    header, action = st.columns([4, 1], vertical_alignment="bottom")
+    with header:
+        page_header("Skills to build", "The gaps that come up again and again across the roles you want, "
+                    "and a plan to close each one.", eyebrow="Your coaching plan")
+
+    analyses = database.list_analyses(user["id"])
+    report_row = database.latest_coaching_report(user["id"])
+    new_since = len({a["id"] for a in analyses} - set(report_row["analysis_ids"])) if report_row else len(analyses)
+
+    if len(analyses) < coaching.MIN_ANALYSES:
+        with st.container(border=True, key="card-skills-empty"):
+            st.markdown(f"**Analyze at least {coaching.MIN_ANALYSES} roles to see your patterns.** "
+                        f"You have {len(analyses)} so far.")
+            st.caption("Open any role and click **Build your plan**. The morning update also analyzes your "
+                       "best new matches automatically.")
+            st.page_link(ROLES_PAGE, label="Go to your roles", icon=":material/arrow_forward:")
+        return
+
+    label = "Build my skills plan" if not report_row else f"Refresh ({new_since} new)" if new_since else "Refresh"
+    if action.button(label, type="primary" if not report_row or new_since else "secondary",
+                     icon=":material/auto_awesome:", use_container_width=True):
+        with show_errors(), st.spinner(f"Finding patterns across {len(analyses)} roles… about a minute"):
+            limits.require(user, "coaching")
+            report = coaching.build_report([a["result"] for a in analyses], user["resume_text"], user["resume_pdf"])
+            limits.use(user, "coaching")
+            database.save_coaching_report(user["id"], [a["id"] for a in analyses], report.model_dump_json())
+            st.rerun()
+
+    if not report_row:
+        st.info(f"You've analyzed {len(analyses)} roles. Click **Build my skills plan** to see what they have "
+                "in common.")
+        return
+
+    report = coaching.SkillReport.model_validate_json(report_row["result_json"])
+    titles = {a["id"]: f"{a['title']} at {a['company']}" for a in analyses}
+    role_ids = database.role_ids_by_analysis(user["id"])
+    total = len(report_row["analysis_ids"])
+
+    st.caption(f"Based on {total} roles · updated {str(report_row['created_at'])[:10]}")
+    with st.container(border=True, key="card-skills-summary"):
+        st.markdown(safe(report.summary))
+
+    for i, theme in enumerate(report.themes):
+        _, color = PRIORITY_BADGE[theme.priority]
+        stripe = {"red": "orange", "orange": "blue", "gray": "gray"}[color]
+        with st.container(border=True, key=f"role-{stripe}-skill-{i}"):
+            st.markdown(f"### {safe(theme.skill)}")
+            label, badge_color = PRIORITY_BADGE[theme.priority]
+            needed = [idx for idx in theme.role_indexes if 0 <= idx < total]
+            with st.container(horizontal=True, gap="small"):
+                st.badge(label, color=badge_color)
+                st.badge(f"Needed in {len(needed)} of {total} roles", color="blue", icon=":material/work:")
+            st.markdown(safe(theme.why_it_matters))
+
+            left, right = st.columns([3, 2], gap="large")
+            with left:
+                st.markdown("**Your plan**")
+                for n, step in enumerate(theme.plan, 1):
+                    st.markdown(f"{n}. {safe(step.action)} :gray[({safe(step.time)})]")
+            with right:
+                st.markdown("**What you already have**")
+                st.caption(safe(theme.what_you_have))
+                st.markdown("**Proof project**")
+                st.caption(safe(theme.proof_project))
+
+            with st.expander(f"Roles that need this ({len(needed)})"):
+                for idx in needed:
+                    analysis_id = report_row["analysis_ids"][idx]
+                    if analysis_id in role_ids:
+                        st.page_link(ROLE_PAGE, label=titles.get(analysis_id, "Role"),
+                                     query_params={"id": role_ids[analysis_id]}, icon=":material/arrow_forward:")
+                    elif analysis_id in titles:
+                        st.markdown(f"- {titles[analysis_id]}")
+
+
 def match_page() -> None:
     page_header("Resume match", "Paste any job description to see how you match and how to tailor your resume.",
                 eyebrow="Tailor your application")
@@ -594,7 +675,8 @@ def settings_page() -> None:
         st.markdown("#### Today's usage")
         with st.container(border=True, key="card-usage"):
             for kind, label in [("fit_checks", "Role scores"), ("analyses", "Full analyses"),
-                                ("discoveries", "Company searches"), ("messages", "Drafted messages")]:
+                                ("discoveries", "Company searches"), ("messages", "Drafted messages"),
+                                ("coaching", "Skills reports")]:
                 used = limits.daily_limit(user, kind) - limits.remaining(user, kind)
                 st.progress(used / limits.daily_limit(user, kind),
                             text=f"{label}: {used} of {limits.daily_limit(user, kind)}")
@@ -619,6 +701,7 @@ else:
         ROLES_PAGE,
         ROLE_PAGE,
         st.Page(match_page, title="Resume match", icon=":material/fact_check:", url_path="match"),
+        st.Page(skills_page, title="Skills", icon=":material/school:", url_path="skills"),
         st.Page(companies_page, title="Companies", icon=":material/apartment:", url_path="companies"),
         st.Page(saved_analyses_page, title="Analyses", icon=":material/description:", url_path="analyses"),
         SETTINGS_PAGE,

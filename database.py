@@ -121,6 +121,16 @@ connections = Table(
     Column("imported_at", DateTime, server_default=func.now()),
 )
 
+# Saved skill coaching reports (latest one is shown).
+coaching_reports = Table(
+    "coaching_reports", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("analysis_ids", Text, nullable=False),  # JSON list, in the order the report's role indexes refer to
+    Column("result_json", Text, nullable=False),
+    Column("created_at", DateTime, server_default=func.now()),
+)
+
 # Per-user daily counters for rate limits.
 usage = Table(
     "usage", metadata,
@@ -466,3 +476,26 @@ def list_connections(user_id: int) -> list[dict]:
 def delete_connections(user_id: int) -> None:
     with engine().begin() as conn:
         conn.execute(delete(connections).where(connections.c.user_id == user_id))
+
+
+# --- Coaching ------------------------------------------------------------------------------
+
+def save_coaching_report(user_id: int, analysis_ids: list[int], result_json: str) -> None:
+    with engine().begin() as conn:
+        conn.execute(coaching_reports.insert().values(
+            user_id=user_id, analysis_ids=json.dumps(analysis_ids), result_json=result_json))
+
+
+def latest_coaching_report(user_id: int) -> dict | None:
+    with engine().connect() as conn:
+        row = conn.execute(select(coaching_reports).where(coaching_reports.c.user_id == user_id)
+                           .order_by(coaching_reports.c.id.desc()).limit(1)).mappings().first()
+    return {**dict(row), "analysis_ids": json.loads(row["analysis_ids"])} if row else None
+
+
+def role_ids_by_analysis(user_id: int) -> dict[int, int]:
+    """{analysis_id: user_posting_id} for analyses that came from a tracked role."""
+    with engine().connect() as conn:
+        rows = conn.execute(select(user_postings.c.analysis_id, user_postings.c.id).where(
+            user_postings.c.user_id == user_id, user_postings.c.analysis_id.is_not(None))).all()
+    return {a: r for a, r in rows}
