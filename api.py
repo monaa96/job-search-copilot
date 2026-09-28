@@ -185,6 +185,11 @@ def get_job(job_id: str, user: dict = Depends(current_user)):
 
 # --- Shapes ----------------------------------------------------------------------------------
 
+def iso(value) -> str:
+    """Timestamps as ISO 8601, which every browser can parse."""
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
 def me_out(user: dict) -> dict:
     user = database.get_user(user["id"])
     usage = {kind: {"used": limits.daily_limit(user, kind) - limits.remaining(user, kind),
@@ -504,7 +509,7 @@ def match(body: MatchIn, user: dict = Depends(current_user)):
 @app.get("/api/analyses")
 def get_analyses(user: dict = Depends(current_user)):
     return [{"id": a["id"], "title": a["title"], "company": a["company"], "match_score": a["match_score"],
-             "created_at": str(a["created_at"]), "analysis": a["result"].model_dump()}
+             "created_at": iso(a["created_at"]), "analysis": a["result"].model_dump()}
             for a in database.list_analyses(user["id"])]
 
 
@@ -535,7 +540,7 @@ def skills_out(user: dict) -> dict:
                 "role_id": role_ids.get(analysis_id)}
 
     out["report"] = {
-        "summary": report.summary, "roles_count": len(row["analysis_ids"]), "created_at": str(row["created_at"]),
+        "summary": report.summary, "roles_count": len(row["analysis_ids"]), "created_at": iso(row["created_at"]),
         "themes": [{**t.model_dump(exclude={"role_indexes"}),
                     "roles": [role_ref(i) for i in t.role_indexes if 0 <= i < len(row["analysis_ids"])]}
                    for t in report.themes],
