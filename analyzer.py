@@ -37,6 +37,11 @@ class ResumeEdit(BaseModel):
     why: str = Field(description="What this change signals to this employer, in one sentence")
 
 
+class AdjacentRole(BaseModel):
+    title: str = Field(description="A job title to search for, e.g. 'Product Operations Manager'")
+    why: str = Field(description="One sentence on why this candidate would be as competitive or more competitive")
+
+
 def _require_all_fields(schema: dict) -> None:
     schema["required"] = list(schema["properties"])
 
@@ -55,6 +60,11 @@ class JobFitAnalysis(BaseModel):
     why_youre_a_fit: List[str] = Field(description="Arguments for the candidate, each tied to a specific role on the resume")
     what_to_emphasize: List[str] = Field(description="Ranked resume points to lead with in the application and interviews")
     skills_to_build: List[SkillToBuild] = Field(description="Ranked by impact on this candidate's chances")
+    adjacent_roles: List[AdjacentRole] = Field(
+        default_factory=list,
+        description="2-4 related role types, at this company or in this industry, where the candidate would be "
+                    "as competitive or more competitive than for this role",
+    )
     resume_edits: List[ResumeEdit] = Field(
         default_factory=list,
         description="3-5 rewrites of existing resume lines that would strengthen this application, most impactful first",
@@ -85,6 +95,9 @@ from the resume. Never invent experience the resume doesn't contain.
 use the employer's vocabulary for things the candidate actually did, and surface buried \
 metrics. Only use facts already in the resume; never add skills, numbers or experience it \
 doesn't contain. Don't try to paper over gaps with wording.
+- For adjacent_roles, suggest real, commonly used job titles close to this one (same function, \
+different level or specialty, or a neighboring function) that play to the candidate's strengths \
+and sidestep their biggest gaps. Keep titles short and searchable.
 - The candidate reads this themselves, so address them as "you" rather than by name \
 or as "the candidate".
 - Be candid about gaps. An inflated score is useless to someone deciding where to spend \

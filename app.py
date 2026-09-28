@@ -21,12 +21,13 @@ import job_sources
 import landing
 import limits
 import logos
+import plans
 import scout
 import styles
 from analyzer import MODEL, analyze_fit
 from discovery import discover_for_user
 from search_profile import SearchProfile
-from ui import fit_badge, fit_label, page_header, render_analysis, safe, show_errors
+from ui import fit_badge, fit_label, page_header, render_analysis, render_resume_edits, safe, show_errors
 
 ROOT = Path(__file__).parent
 load_dotenv(ROOT / ".env")
@@ -274,14 +275,118 @@ def role_card(p: dict) -> None:
                 database.set_posting_status(user["id"], p["id"], "dismissed")
                 st.rerun()
 
-        if p["analysis_id"] and (analysis := database.get_analysis(user["id"], p["analysis_id"])):
-            with st.expander("Full analysis and resume suggestions"):
-                render_analysis(analysis, heading=False)
-        elif st.button("Get full analysis and resume suggestions", key=f"analyze-{p['id']}",
-                       icon=":material/auto_awesome:", type="tertiary"):
-            with show_errors(), st.spinner("Analyzing… about 30 seconds"):
-                scout.analyze_posting(user, p)
+        label = "Open your plan to land it" if p["analysis_id"] else "Build your plan to land it"
+        st.page_link(ROLE_PAGE, label=label, icon=":material/arrow_forward:", query_params={"id": p["id"]})
+
+
+def role_page() -> None:
+    role_id = st.query_params.get("id", "")
+    p = database.get_user_posting(user["id"], int(role_id)) if role_id.isdigit() else None
+    st.page_link(ROLES_PAGE, label="All roles", icon=":material/arrow_back:")
+    if not p:
+        st.warning("That role isn't in your list anymore.")
+        return
+
+    # Header
+    with st.container(border=True, key="card-role-header"):
+        info, actions = st.columns([5, 2], vertical_alignment="center")
+        meta = [p["company"], p["location"] or "Location not listed"]
+        if p["posted_at"]:
+            meta.append(f"Posted {p['posted_at'][:10]}")
+        info.html(f'<div class="role-head">{company_mark(p["company"], p["logo_url"])}<div>'
+                  f'<div class="role-title big">{html.escape(p["title"])}</div>'
+                  f'<div class="role-meta">{html.escape(" · ".join(meta))}</div></div></div>')
+        with actions, st.container(horizontal=True, horizontal_alignment="right", gap="small"):
+            st.link_button("View posting", p["url"], icon=":material/open_in_new:")
+            saved = p["status"] == "saved"
+            if st.button("Saved" if saved else "Save", icon=":material/bookmark" + ("" if saved else "_border") + ":",
+                         type="primary" if saved else "secondary"):
+                database.set_posting_status(user["id"], p["id"], "new" if saved else "saved")
                 st.rerun()
+
+    analysis = database.get_analysis(user["id"], p["analysis_id"]) if p["analysis_id"] else None
+    if not analysis:
+        with st.container(border=True, key="card-build-plan"):
+            fit_badge(p["fit_score"])
+            st.markdown(safe(p["fit_reason"]))
+            st.markdown("**Get your plan to land this role:** what to change on your resume, which skills to build, "
+                        "how to position yourself, and related roles where you may be even more competitive.")
+            if st.button("Build my plan", type="primary", icon=":material/auto_awesome:"):
+                with show_errors(), st.spinner("Analyzing the role against your resume… about 30 seconds"):
+                    scout.analyze_posting(user, p)
+                    st.rerun()
+        return
+
+    rec = plans.recommendation(analysis.match_score, p["company"])
+    with st.container(border=True, key=f"role-{rec.color}-rec"):
+        st.html('<div class="eyebrow">Our recommendation</div>')
+        st.markdown(f"### {rec.headline}")
+        fit_badge(analysis.match_score)
+        st.markdown(f"{rec.detail}  \n:gray[{safe(analysis.verdict)}]")
+
+    left, right = st.columns([3, 2], gap="large")
+    with left:
+        steps = plans.build_plan(analysis, p["company"])
+        done = database.get_plan_done(p)
+        st.markdown("#### Your plan to land it")
+        st.progress(len(done & {s.key for s in steps}) / len(steps),
+                    text=f"{len(done & {s.key for s in steps})} of {len(steps)} done")
+        for step in steps:
+            with st.container(border=True, key=f"card-step-{step.key}"):
+                checked = st.checkbox(f"**{safe(step.title)}**", value=step.key in done,
+                                      key=f"plan-{p['id']}-{step.key}")
+                st.caption(safe(step.detail))
+                if checked != (step.key in done):
+                    database.set_plan_done(user["id"], p["id"], done ^ {step.key})
+                    st.rerun()
+    with right:
+        st.markdown("#### At a glance")
+        with st.container(border=True, key="card-glance"):
+            st.markdown("**Where you're strong**")
+            for m in analysis.strong_matches[:4]:
+                st.markdown(f":green[:material/check_circle:] {safe(m.skill)}")
+            st.markdown("**Gaps**")
+            for g in analysis.skill_gaps[:4]:
+                label, color = {"critical": ("Critical", "red"), "important": ("Important", "orange"),
+                                "nice-to-have": ("Nice to have", "gray")}[g.importance]
+                st.markdown(f"{safe(g.skill)} :{color}-badge[{label}]")
+
+    adjacent_tab, resume_tab, full_tab = st.tabs(["Adjacent roles", "Resume suggestions", "Full analysis"])
+    with adjacent_tab:
+        adjacent_roles(analysis, p)
+    with resume_tab:
+        render_resume_edits(analysis)
+    with full_tab:
+        render_analysis(analysis, heading=False, resume_edits=False)
+
+
+def adjacent_roles(analysis, p: dict) -> None:
+    if not analysis.adjacent_roles:
+        st.caption("Rebuild the plan to get adjacent role suggestions for this role.")
+        return
+    st.caption(f"Roles where your background may be as strong or stronger, at {p['company']} and the other "
+               "companies you watch.")
+    watched = [c["company_id"] for c in database.list_user_companies(user["id"], "tracking") if c["company_id"]]
+    openings = database.open_postings_at(list({*watched, p["company_id"]}))
+    for i, (title, why, matches) in enumerate(plans.find_adjacent_openings(analysis, p, openings)):
+        with st.container(border=True, key=f"card-adjacent-{i}"):
+            st.markdown(f"**{safe(title)}**")
+            st.caption(safe(why))
+            for m in matches:
+                row, link = st.columns([6, 1], vertical_alignment="center")
+                row.html(f'<div class="role-head">{company_mark(m["company"], m["logo_url"], "tiny")}<div>'
+                         f'<div class="role-title small">{html.escape(m["title"])}</div>'
+                         f'<div class="role-meta">{html.escape(m["company"] + " · " + (m["location"] or ""))}'
+                         '</div></div></div>')
+                link.link_button("View", m["url"], use_container_width=True)
+            if not matches:
+                st.caption("No open roles with this title at your companies right now.")
+            if title.lower() not in {t.lower() for t in profile.include_titles}:
+                if st.button(f"Add \"{title}\" to my search", key=f"add-title-{i}", icon=":material/add:",
+                             type="tertiary"):
+                    database.save_profile(user["id"], profile.model_copy(
+                        update={"include_titles": [*profile.include_titles, title]}))
+                    st.toast(f"Added. New {title} roles will show up after the next update.")
 
 
 def companies_page() -> None:
@@ -428,11 +533,14 @@ def settings_page() -> None:
 
 
 # --- Routing ------------------------------------------------------------------------------------
+ROLES_PAGE = st.Page(roles_page, title="Roles", icon=":material/work:", default=True)
+ROLE_PAGE = st.Page(role_page, title="Role", url_path="role", visibility="hidden")
 if not has_resume or not user["profile_json"] or not database.list_user_companies(user["id"]):
     onboarding()
 else:
     st.navigation([
-        st.Page(roles_page, title="Roles", icon=":material/work:", default=True),
+        ROLES_PAGE,
+        ROLE_PAGE,
         st.Page(match_page, title="Resume match", icon=":material/fact_check:", url_path="match"),
         st.Page(companies_page, title="Companies", icon=":material/apartment:", url_path="companies"),
         st.Page(saved_analyses_page, title="Analyses", icon=":material/description:", url_path="analyses"),

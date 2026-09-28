@@ -34,6 +34,9 @@ CSS = """
 .role-head { display: flex; align-items: center; gap: 0.75rem; }
 .role-title { font-weight: 600; font-size: 1.02rem; color: #131A2A; }
 .role-meta { color: #5B6475; font-size: 0.85rem; margin-top: 0.1rem; }
+.role-title.big { font-size: 1.35rem; font-weight: 700; }
+.role-title.small { font-size: 0.95rem; }
+.logo.tiny, .avatar.tiny { width: 2rem; height: 2rem; font-size: 0.85rem; border-radius: 0.5rem; padding: 0.2rem; }
 .tile-why {
   color: #5B6475; font-size: 0.875rem; line-height: 1.4;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;

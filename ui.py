@@ -57,7 +57,7 @@ def page_header(title: str, subtitle: str = "", eyebrow: str = "") -> None:
         st.caption(subtitle)
 
 
-def render_analysis(a: JobFitAnalysis, heading: bool = True) -> None:
+def render_analysis(a: JobFitAnalysis, heading: bool = True, resume_edits: bool = True) -> None:
     if heading:
         st.markdown(f"### {safe(a.job_title)}")
         st.caption(a.company)
@@ -89,12 +89,18 @@ def render_analysis(a: JobFitAnalysis, heading: bool = True) -> None:
         for i, s in enumerate(a.skills_to_build, 1):
             st.markdown(f"{i}. **{safe(s.skill)}**: {safe(s.how)}")
 
-    if a.resume_edits:
+    if resume_edits and a.resume_edits:
         st.markdown("##### Resume suggestions for this role")
-        for i, edit in enumerate(a.resume_edits):
-            with st.container(border=True, key=f"card-edit-{id(a)}-{i}"):
-                st.caption("Current")
-                st.markdown(safe(edit.original))
-                st.caption("Suggested")
-                st.markdown(f"**{safe(edit.suggested)}**")
-                st.caption(safe(edit.why))
+        render_resume_edits(a)
+
+
+def render_resume_edits(a: JobFitAnalysis) -> None:
+    if not a.resume_edits:
+        st.caption("No resume suggestions for this role.")
+    for i, edit in enumerate(a.resume_edits):
+        with st.container(border=True, key=f"card-edit-{id(a)}-{i}"):
+            st.caption("Current")
+            st.markdown(safe(edit.original))
+            st.caption("Suggested")
+            st.markdown(f"**{safe(edit.suggested)}**")
+            st.caption(safe(edit.why))

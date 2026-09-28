@@ -11,6 +11,7 @@ command line / the daily GitHub Actions workflow:
 """
 
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -36,7 +37,8 @@ class QuickFit(BaseModel):
 QUICK_FIT_SYSTEM = """You screen job postings for a candidate. Given their resume and one \
 job posting, estimate how well they fit. Judge what the job actually requires against what \
 the candidate has done, not keyword overlap, and be candid rather than generous. The \
-reason is shown to the candidate, so address them as "you".
+reason is shown to the candidate, so address them as "you". Write it as one plain-text sentence with \
+ordinary punctuation (no markup or typesetting codes).
 
 """ + SCORING_GUIDE
 
@@ -62,9 +64,12 @@ def quick_fit(client: anthropic.Anthropic, posting: dict, user: dict) -> QuickFi
         messages=[{"role": "user", "content": [resume, {"type": "text", "text": _posting_text(posting)}]}],
         output_format=QuickFit,
     )
-    if response.stop_reason in ("refusal", "max_tokens"):
+    if response.stop_reason in ("refusal", "max_tokens") or response.parsed_output is None:
         return None
-    return response.parsed_output
+    fit = response.parsed_output
+    # The model occasionally writes the typesetting code \ndash, which JSON turns into a newline + "dash".
+    fit.reason = re.sub(r"\s+", " ", fit.reason.replace("\ndash", "\u2013")).strip()
+    return fit
 
 
 def analyze_posting(user: dict, posting: dict, client: anthropic.Anthropic | None = None) -> int:

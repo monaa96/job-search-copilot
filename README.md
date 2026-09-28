@@ -7,7 +7,7 @@ An AI job scout. Sign in, upload your resume, say what you're looking for, and i
 1. **Finds companies** that match your interests and background, using an AI agent that researches the web
 2. **Scans their job boards every morning** for new roles that match your target titles and locations
 3. **Scores every new job against your resume** and ranks your daily list by fit
-4. **Explains the fit in depth**: evidence-backed strengths, prioritized skill gaps, what to emphasize, and specific rewrites of your resume bullets for that role
+4. **Gives you a plan to land each role**: a clear recommendation (apply now, apply with a referral, or look at adjacent roles), a checklist of concrete actions (resume edits, skills to build with specific projects, a referral to find, the story to lead with), and adjacent roles where you may be even more competitive
 
 <!-- TODO: add screenshots of Today's jobs, Companies, and a full analysis (use sample data) -->
 
@@ -60,6 +60,7 @@ If a candidate gets a short, ranked list of new roles each morning, each with an
 | `job_sources.py` | Finds a company's job board and fetches its postings |
 | `scout.py` | The daily scan pipeline, for one user or all users |
 | `database.py` | Users, companies, postings, analyses and usage; SQLite or Postgres |
+| `plans.py` | Turns an analysis into a recommendation, a plan checklist, and real adjacent openings |
 | `limits.py` | Per-user daily usage limits |
 | `search_profile.py` | A user's search preferences |
 | `.github/workflows/daily-scan.yml` | Runs the scan for every user each morning |
@@ -83,6 +84,8 @@ If a candidate gets a short, ranked list of new roles each morning, each with an
 **Shared where it's public, private where it's personal.** Companies and job postings are shared across users, so a board is fetched once no matter how many people track it. Resumes, searches, scores and analyses are per user, and users can delete all their data from the app. PDFs go straight to the model, so there's no resume-parsing code.
 
 **Cost controls for a public app.** Every user has daily limits on fit checks, full analyses and company searches (owners get higher limits), on top of the account-level spending cap. The cost of adding a user is bounded and predictable.
+
+**Plans assembled by rules, judgment by AI.** The AI decides what the gaps are and which adjacent roles make sense; plain code turns that into the recommendation and checklist, and matches suggested role types to real open postings. The plan is instant, free and consistent, and every adjacent-role suggestion points to a job that actually exists.
 
 **Resume suggestions that can't lie.** Each analysis rewrites 3–5 existing resume lines in the employer's vocabulary. The prompt forbids adding skills, numbers or experience the resume doesn't contain.
 
@@ -135,12 +138,13 @@ To scan automatically every morning on your own Mac:
 1. ✅ **Job-fit analyzer**: resume + job description → structured analysis
 2. ✅ **Company discovery and daily job scan**
 3. ✅ **Public multi-user version**: Google sign-in, per-user data and limits, cloud daily scan, resume suggestions
-4. **Learns from your choices**: use save/dismiss history to improve which companies are suggested and how jobs are scored
-5. **Takes actions**: for saved jobs, draft a tailored resume version and an outreach message, with user approval before anything is used
-6. **Pursues a goal**: "find me 10 strong-fit roles this month"; the agent keeps researching and scanning until it gets there, and reports what it tried
-7. **Application tracker**: status per job (applied → interviewing → offer), contacts, follow-ups
-8. **Email digest**: "5 new matches for you" each morning
-9. **Cross-job insights**: "Across the jobs I've saved, what skills am I consistently missing?", aggregating `skill_gaps` to set skill-building priorities
+4. ✅ **Plan to land it**: per-role recommendation, action checklist with progress, adjacent roles matched to real openings
+5. **Learns from your choices**: use save/dismiss history to improve which companies are suggested and how jobs are scored
+6. **Takes actions**: for saved jobs, draft a tailored resume version and an outreach message, with user approval before anything is used
+7. **Pursues a goal**: "find me 10 strong-fit roles this month"; the agent keeps researching and scanning until it gets there, and reports what it tried
+8. **Application tracker**: status per job (applied → interviewing → offer), contacts, follow-ups
+9. **Email digest**: "5 new matches for you" each morning
+10. **Cross-job insights**: "Across the jobs I've saved, what skills am I consistently missing?", aggregating `skill_gaps` to set skill-building priorities
 
 ## Tradeoffs and what I learned
 

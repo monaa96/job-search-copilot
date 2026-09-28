@@ -6,6 +6,7 @@ each company's job board is fetched once per scan no matter how many users
 track it; everything personal (resume, search, statuses, scores) is per user.
 """
 
+import json
 import os
 from datetime import date
 from pathlib import Path
@@ -88,6 +89,7 @@ user_postings = Table(
     Column("fit_score", Integer),
     Column("fit_reason", Text),
     Column("analysis_id", Integer, ForeignKey("analyses.id", ondelete="SET NULL")),
+    Column("plan_done", Text),  # JSON list of completed plan step keys
     Column("first_seen", DateTime, server_default=func.now()),
     UniqueConstraint("user_id", "posting_id"),
 )
@@ -399,5 +401,35 @@ def list_scored_postings(user_id: int, min_score: int, statuses: tuple[str, ...]
     query = (_user_posting_query(user_id)
              .where(user_postings.c.fit_score >= min_score, user_postings.c.status.in_(statuses))
              .order_by(user_postings.c.fit_score.desc(), user_postings.c.first_seen.desc()))
+    with engine().connect() as conn:
+        return [dict(r) for r in conn.execute(query).mappings()]
+
+
+def get_user_posting(user_id: int, user_posting_id: int) -> dict | None:
+    query = _user_posting_query(user_id).where(user_postings.c.id == user_posting_id)
+    with engine().connect() as conn:
+        row = conn.execute(query).mappings().first()
+    return dict(row) if row else None
+
+
+def get_plan_done(row: dict) -> set[str]:
+    return set(json.loads(row["plan_done"])) if row.get("plan_done") else set()
+
+
+def set_plan_done(user_id: int, user_posting_id: int, done: set[str]) -> None:
+    with engine().begin() as conn:
+        conn.execute(update(user_postings).where(
+            user_postings.c.id == user_posting_id, user_postings.c.user_id == user_id,
+        ).values(plan_done=json.dumps(sorted(done))))
+
+
+def open_postings_at(company_ids: list[int]) -> list[dict]:
+    """Every open posting at these companies (title-level info only), for finding adjacent roles."""
+    if not company_ids:
+        return []
+    query = (select(postings.c.id, postings.c.title, postings.c.location, postings.c.url, postings.c.company_id,
+                    companies.c.name.label("company"), companies.c.logo_url)
+             .join(companies, companies.c.id == postings.c.company_id)
+             .where(postings.c.company_id.in_(company_ids), postings.c.is_open.is_(True)))
     with engine().connect() as conn:
         return [dict(r) for r in conn.execute(query).mappings()]
