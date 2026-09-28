@@ -8,6 +8,7 @@ Settings (environment variables):
   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET          Google sign-in
   API_BASE_URL          this API's public URL, for Google's redirect (e.g. https://api.example.com)
   FRONTEND_ORIGINS      comma-separated frontend URLs allowed to call the API and receive sign-in redirects
+  FRONTEND_ORIGIN_REGEX optional pattern for more frontend URLs (e.g. this project's Lovable preview addresses)
   DEV_LOGIN=1           local development only: enables /api/auth/dev-login without Google
 """
 
@@ -52,15 +53,16 @@ if not SECRET_KEY:
     SECRET_KEY = "local-development-only"
 FRONTEND_ORIGINS = [o.strip().rstrip("/") for o in os.getenv("FRONTEND_ORIGINS", "").split(",") if o.strip()]
 TOKEN_MAX_AGE = 30 * 24 * 3600
-# Lovable's editor previews and hosted apps run on these domains.
-LOVABLE_ORIGIN = r"https://([a-z0-9-]+\.)*(lovable\.app|lovableproject\.com)"
+# Only our own frontends may call the API or receive sign-in tokens. Never allow a whole
+# hosting domain like *.lovable.app: anyone can publish a site there.
+FRONTEND_ORIGIN_REGEX = os.getenv("FRONTEND_ORIGIN_REGEX") or None
 
 app = FastAPI(title="Job Search Copilot API")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, same_site="lax", https_only=False)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=FRONTEND_ORIGINS,
-    allow_origin_regex=LOVABLE_ORIGIN,
+    allow_origin_regex=FRONTEND_ORIGIN_REGEX,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -98,7 +100,7 @@ oauth.register(
 def _allowed_redirect(url: str) -> bool:
     """Only send sign-in tokens back to our own frontends."""
     origin = "{0.scheme}://{0.netloc}".format(urlparse(url))
-    return origin in FRONTEND_ORIGINS or bool(re.fullmatch(LOVABLE_ORIGIN, origin))
+    return origin in FRONTEND_ORIGINS or bool(FRONTEND_ORIGIN_REGEX and re.fullmatch(FRONTEND_ORIGIN_REGEX, origin))
 
 
 @app.get("/api/auth/login")
