@@ -139,12 +139,12 @@ To scan automatically every morning on your own Mac:
 2. ✅ **Company discovery and daily job scan**
 3. ✅ **Public multi-user version**: Google sign-in, per-user data and limits, cloud daily scan, resume suggestions
 4. ✅ **Plan to land it**: per-role recommendation, action checklist with progress, adjacent roles matched to real openings
-5. **Learns from your choices**: use save/dismiss history to improve which companies are suggested and how jobs are scored
-6. **Takes actions**: for saved jobs, draft a tailored resume version and an outreach message, with user approval before anything is used
-7. **Pursues a goal**: "find me 10 strong-fit roles this month"; the agent keeps researching and scanning until it gets there, and reports what it tried
-8. **Application tracker**: status per job (applied → interviewing → offer), contacts, follow-ups
-9. **Email digest**: "5 new matches for you" each morning
-10. **Cross-job insights**: "Across the jobs I've saved, what skills am I consistently missing?", aggregating `skill_gaps` to set skill-building priorities
+5. **Referrals**: import your LinkedIn connections export; each role shows who you know at the company and drafts the ask
+6. **Skill coaching**: a dashboard of the skills you're missing most often across your target roles, with a learning plan for each
+7. **Redesigned frontend**: a React frontend (Lovable or hand-built) on top of this Python backend, served as an API
+8. **Application tracker**: status per role (applied → interviewing → offer), contacts and follow-ups, building on the plan checklist
+9. **Learns from your choices**: use save/dismiss history and outcomes to improve suggestions and scoring
+10. **Email digest**: "5 new matches for you" each morning
 
 ## Tradeoffs and what I learned
 
