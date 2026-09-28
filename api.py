@@ -18,6 +18,7 @@ import re
 import threading
 import uuid
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
@@ -339,8 +340,19 @@ def put_search(profile: SearchProfile, user: dict = Depends(current_user)):
 
 # --- Roles ---------------------------------------------------------------------------------
 
+def _posted(p: dict) -> datetime | None:
+    try:
+        posted = datetime.fromisoformat(p["posted_at"]) if p["posted_at"] else None
+    except ValueError:
+        return None
+    return posted.replace(tzinfo=timezone.utc) if posted and posted.tzinfo is None else posted
+
+
 @app.get("/api/roles")
-def get_roles(view: str = "best", user: dict = Depends(current_user)):
+def get_roles(view: str = "best", posted_within: int | None = None, sort: str = "fit",
+              user: dict = Depends(current_user)):
+    """posted_within: only roles posted in the last N days (roles without a date are hidden).
+    sort: "fit" (best fit first) or "recent" (newest first)."""
     ensure_logos(user)
     profile = database.get_profile(user)
     connections = database.list_connections(user["id"])
@@ -351,6 +363,12 @@ def get_roles(view: str = "best", user: dict = Depends(current_user)):
         roles = all_roles
     else:
         roles = [p for p in all_roles if p["fit_score"] >= profile.min_score]
+    if posted_within:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=posted_within)
+        roles = [p for p in roles if (posted := _posted(p)) and posted >= cutoff]
+    if sort == "recent":
+        oldest = datetime.min.replace(tzinfo=timezone.utc)
+        roles.sort(key=lambda p: (_posted(p) or oldest, p["fit_score"]), reverse=True)
     return {"stats": {"strong_count": sum(p["fit_score"] >= profile.min_score for p in all_roles),
                       "saved_count": sum(p["status"] == "saved" for p in all_roles),
                       "companies_watched": len(database.list_user_companies(user["id"], "tracking")),

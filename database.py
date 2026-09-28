@@ -394,7 +394,8 @@ def _user_posting_query(user_id: int):
 def postings_needing_fit_check(user_id: int, limit: int) -> list[dict]:
     query = (_user_posting_query(user_id)
              .where(user_postings.c.status == "new", user_postings.c.fit_score.is_(None))
-             .order_by(user_postings.c.first_seen.desc()).limit(limit))
+             # Newest postings first, so each day's fit checks go to fresh roles.
+             .order_by(postings.c.posted_at.desc().nulls_last(), user_postings.c.first_seen.desc()).limit(limit))
     with engine().connect() as conn:
         return [dict(r) for r in conn.execute(query).mappings()]
 

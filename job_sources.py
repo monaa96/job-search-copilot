@@ -117,7 +117,7 @@ def fetch_jobs(ats: str, slug: str) -> list[dict]:
                 "location": (j.get("location") or {}).get("name", ""),
                 "url": j.get("absolute_url", ""),
                 "description": _strip_html(html.unescape(j.get("content") or "")),
-                "posted_at": j.get("first_published") or j.get("updated_at"),
+                "posted_at": j.get("first_published"),  # updated_at changes on any edit, so it's not used
             })
     elif ats == "lever":
         for j in data:

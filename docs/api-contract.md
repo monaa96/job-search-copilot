@@ -108,7 +108,7 @@ type SavedAnalysis = { id: number; title: string; company: string; match_score: 
 | `DELETE /api/me` | | Deletes all of the user's data |
 | `PUT /api/resume` | multipart form: `file` (PDF/txt) **or** `text` field | `Me` |
 | `GET /api/search` · `PUT /api/search` | `SearchProfile` | `SearchProfile` |
-| `GET /api/roles?view=best\|saved\|all` | | `RolesResponse` |
+| `GET /api/roles?view=best\|saved\|all&posted_within=<days>&sort=fit\|recent` | | `RolesResponse`. `posted_within` hides roles older than N days (and roles with no posting date); `sort=recent` puts the newest first |
 | `POST /api/roles/refresh` | | *job* → `{ summary }`: checks tracked companies for new roles |
 | `POST /api/roles/find` | | *job* → `{ summary }`: first run: discover companies, track them, scan (3–5 min) |
 | `GET /api/roles/{id}` | | `RoleDetail` |
