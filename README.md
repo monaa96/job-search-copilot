@@ -8,6 +8,7 @@ An AI job scout. Sign in, upload your resume, say what you're looking for, and i
 2. **Scans their job boards every morning** for new roles that match your target titles and locations
 3. **Scores every new job against your resume** and ranks your daily list by fit
 4. **Gives you a plan to land each role**: a clear recommendation (apply now, apply with a referral, or look at adjacent roles), a checklist of concrete actions (resume edits, skills to build with specific projects, a referral to find, the story to lead with), and adjacent roles where you may be even more competitive
+5. **Finds your warm path in**: import your LinkedIn connections, and each role shows who you know at the company, ranked by who can help most, with a drafted referral ask
 
 <!-- TODO: add screenshots of Today's jobs, Companies, and a full analysis (use sample data) -->
 
@@ -60,6 +61,7 @@ If a candidate gets a short, ranked list of new roles each morning, each with an
 | `job_sources.py` | Finds a company's job board and fetches its postings |
 | `scout.py` | The daily scan pipeline, for one user or all users |
 | `database.py` | Users, companies, postings, analyses and usage; SQLite or Postgres |
+| `referrals.py` | Parses LinkedIn's connections export, matches people to companies, ranks who to ask, drafts the message |
 | `plans.py` | Turns an analysis into a recommendation, a plan checklist, and real adjacent openings |
 | `limits.py` | Per-user daily usage limits |
 | `search_profile.py` | A user's search preferences |
@@ -86,6 +88,8 @@ If a candidate gets a short, ranked list of new roles each morning, each with an
 **Cost controls for a public app.** Every user has daily limits on fit checks, full analyses and company searches (owners get higher limits), on top of the account-level spending cap. The cost of adding a user is bounded and predictable.
 
 **Plans assembled by rules, judgment by AI.** The AI decides what the gaps are and which adjacent roles make sense; plain code turns that into the recommendation and checklist, and matches suggested role types to real open postings. The plan is instant, free and consistent, and every adjacent-role suggestion points to a job that actually exists.
+
+**Referrals without scraping or spam.** Connections come from LinkedIn's official data export, not scraping. Only names, companies, titles and profile links are stored (emails are discarded), they're visible only to the user, and the app never contacts anyone: it drafts a message the user reviews and sends.
 
 **Resume suggestions that can't lie.** Each analysis rewrites 3–5 existing resume lines in the employer's vocabulary. The prompt forbids adding skills, numbers or experience the resume doesn't contain.
 
@@ -139,7 +143,7 @@ To scan automatically every morning on your own Mac:
 2. ✅ **Company discovery and daily job scan**
 3. ✅ **Public multi-user version**: Google sign-in, per-user data and limits, cloud daily scan, resume suggestions
 4. ✅ **Plan to land it**: per-role recommendation, action checklist with progress, adjacent roles matched to real openings
-5. **Referrals**: import your LinkedIn connections export; each role shows who you know at the company and drafts the ask
+5. ✅ **Referrals**: import your LinkedIn connections export; each role shows who you know at the company and drafts the ask
 6. **Skill coaching**: a dashboard of the skills you're missing most often across your target roles, with a learning plan for each
 7. **Redesigned frontend**: a React frontend (Lovable or hand-built) on top of this Python backend, served as an API
 8. **Application tracker**: status per role (applied → interviewing → offer), contacts and follow-ups, building on the plan checklist

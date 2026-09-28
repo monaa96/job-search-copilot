@@ -22,6 +22,7 @@ import landing
 import limits
 import logos
 import plans
+import referrals
 import scout
 import styles
 from analyzer import MODEL, analyze_fit
@@ -148,6 +149,16 @@ def company_mark(name: str, logo_url: str | None, size: str = "") -> str:
     return f'<div class="avatar {size}" style="background:{color}">{html.escape(name[:1].upper())}</div>'
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _all_connections(user_id: int, version: str) -> list[dict]:
+    return database.list_connections(user_id)
+
+
+def connections_at(company: str) -> list[dict]:
+    people = _all_connections(user["id"], st.session_state.get("connections_version", ""))
+    return [c for c in people if referrals.same_company(c["company"], company)]
+
+
 def find_roles() -> None:
     """Research companies, track every one with a job board, and scan them for roles."""
     with show_errors(), st.status("Finding roles for you… this takes a few minutes", expanded=True) as status:
@@ -260,7 +271,11 @@ def role_card(p: dict) -> None:
             st.html(f'<div class="role-head">{company_mark(p["company"], p["logo_url"], "small")}<div>'
                     f'<div class="role-title">{html.escape(p["title"])}</div>'
                     f'<div class="role-meta">{html.escape(" · ".join(meta))}</div></div></div>')
-            fit_badge(p["fit_score"])
+            with st.container(horizontal=True, gap="small"):
+                fit_badge(p["fit_score"])
+                if known := len(connections_at(p["company"])):
+                    st.badge(f"You know {known} {'person' if known == 1 else 'people'} here",
+                             icon=":material/group:", color="violet")
             st.markdown(safe(p["fit_reason"]))
         with actions, st.container(horizontal=True, horizontal_alignment="right", gap="small"):
             st.link_button("View", p["url"], icon=":material/open_in_new:")
@@ -326,7 +341,9 @@ def role_page() -> None:
 
     left, right = st.columns([3, 2], gap="large")
     with left:
-        steps = plans.build_plan(analysis, p["company"])
+        contacts = referrals.rank_contacts(connections_at(p["company"]), p["title"])
+        has_connections = bool(_all_connections(user["id"], st.session_state.get("connections_version", "")))
+        steps = plans.build_plan(analysis, p["company"], contacts, has_connections)
         done = database.get_plan_done(p)
         st.markdown("#### Your plan to land it")
         st.progress(len(done & {s.key for s in steps}) / len(steps),
@@ -351,6 +368,8 @@ def role_page() -> None:
                                 "nice-to-have": ("Nice to have", "gray")}[g.importance]
                 st.markdown(f"{safe(g.skill)} :{color}-badge[{label}]")
 
+        people_you_know(p, analysis, contacts, has_connections)
+
     adjacent_tab, resume_tab, full_tab = st.tabs(["Adjacent roles", "Resume suggestions", "Full analysis"])
     with adjacent_tab:
         adjacent_roles(analysis, p)
@@ -358,6 +377,34 @@ def role_page() -> None:
         render_resume_edits(analysis)
     with full_tab:
         render_analysis(analysis, heading=False, resume_edits=False)
+
+
+def people_you_know(p: dict, analysis, contacts: list, has_connections: bool) -> None:
+    st.markdown(f"#### People you know at {p['company']}")
+    with st.container(border=True, key="card-people"):
+        if not has_connections:
+            st.caption("Import your LinkedIn connections to see who can refer you.")
+            st.page_link(SETTINGS_PAGE, label="Import connections", icon=":material/upload:")
+            return
+        if not contacts:
+            st.caption(f"None of your connections work at {p['company']} yet.")
+            return
+        for i, c in enumerate(contacts):
+            name = f"[{c.name}]({c.url})" if c.url else c.name
+            st.markdown(f"**{name}**  \n:gray[{safe(c.position)}]")
+            st.caption(c.why)
+            draft_key = f"draft-{p['id']}-{i}"
+            if st.button("Draft a message", key=f"btn-{draft_key}", icon=":material/edit:", type="tertiary"):
+                with show_errors(), st.spinner("Drafting…"):
+                    limits.require(user, "messages")
+                    st.session_state[draft_key] = referrals.draft_message(
+                        c, p["title"], p["company"], analysis, user["resume_text"], user["resume_pdf"])
+                    limits.use(user, "messages")
+            if draft_key in st.session_state:
+                st.code(st.session_state[draft_key], language=None, wrap_lines=True)
+                st.caption("Copy it, make it your own, and send it on LinkedIn.")
+            if i < len(contacts) - 1:
+                st.divider()
 
 
 def adjacent_roles(analysis, p: dict) -> None:
@@ -449,9 +496,12 @@ def company_tile(c: dict, roles: int, suggested: bool) -> None:
         board = job_sources.board_page_url(c["ats"], c["ats_slug"])
         st.caption(f"[{ATS_NAMES[c['ats']]} job board]({board})")
         st.html(f'<div class="tile-why">{html.escape(c["why_it_fits"] or "Added by you")}</div>')
-        if not suggested:
-            label = f"{roles} role{'s' if roles != 1 else ''} for you"
-            st.badge(label, color="blue" if roles else "gray", icon=":material/work:")
+        with st.container(horizontal=True, gap="small"):
+            if not suggested:
+                label = f"{roles} role{'s' if roles != 1 else ''} for you"
+                st.badge(label, color="blue" if roles else "gray", icon=":material/work:")
+            if known := len(connections_at(c["name"])):
+                st.badge(f"You know {known}", color="violet", icon=":material/group:")
         with st.container(horizontal=True, gap="small"):
             if suggested:
                 if st.button("Add", key=f"track-{c['id']}", type="primary", icon=":material/add:"):
@@ -515,10 +565,36 @@ def settings_page() -> None:
             with st.expander("Replace resume"):
                 resume_uploader("settings")
 
+        st.markdown("#### LinkedIn connections")
+        with st.container(border=True, key="card-connections"):
+            people = database.list_connections(user["id"])
+            if people:
+                st.markdown(f"**{len(people):,} connections** imported")
+            st.caption("Used only to show who you know at each company. Emails aren't stored, and the app never "
+                       "contacts anyone.")
+            with st.expander("Import from LinkedIn" if not people else "Replace connections"):
+                st.markdown("1. On LinkedIn, go to **Settings → Data privacy → Get a copy of your data**\n"
+                            "2. Choose **Connections** and request the archive\n"
+                            "3. When LinkedIn emails you, download it and upload **Connections.csv** here")
+                upload = st.file_uploader("Connections.csv", type=["csv"], key="connections-file")
+                if upload is not None and st.button("Import", type="primary"):
+                    try:
+                        imported = referrals.parse_linkedin_csv(upload.getvalue())
+                    except ValueError as e:
+                        st.error(str(e))
+                    else:
+                        database.replace_connections(user["id"], imported)
+                        st.session_state["connections_version"] = str(len(imported)) + upload.name
+                        st.rerun()
+            if people and st.button("Delete connections", type="tertiary", icon=":material/delete:"):
+                database.delete_connections(user["id"])
+                st.session_state["connections_version"] = "deleted"
+                st.rerun()
+
         st.markdown("#### Today's usage")
         with st.container(border=True, key="card-usage"):
             for kind, label in [("fit_checks", "Role scores"), ("analyses", "Full analyses"),
-                                ("discoveries", "Company searches")]:
+                                ("discoveries", "Company searches"), ("messages", "Drafted messages")]:
                 used = limits.daily_limit(user, kind) - limits.remaining(user, kind)
                 st.progress(used / limits.daily_limit(user, kind),
                             text=f"{label}: {used} of {limits.daily_limit(user, kind)}")
@@ -535,6 +611,7 @@ def settings_page() -> None:
 # --- Routing ------------------------------------------------------------------------------------
 ROLES_PAGE = st.Page(roles_page, title="Roles", icon=":material/work:", default=True)
 ROLE_PAGE = st.Page(role_page, title="Role", url_path="role", visibility="hidden")
+SETTINGS_PAGE = st.Page(settings_page, title="Settings", icon=":material/settings:", url_path="settings")
 if not has_resume or not user["profile_json"] or not database.list_user_companies(user["id"]):
     onboarding()
 else:
@@ -544,5 +621,5 @@ else:
         st.Page(match_page, title="Resume match", icon=":material/fact_check:", url_path="match"),
         st.Page(companies_page, title="Companies", icon=":material/apartment:", url_path="companies"),
         st.Page(saved_analyses_page, title="Analyses", icon=":material/description:", url_path="analyses"),
-        st.Page(settings_page, title="Settings", icon=":material/settings:", url_path="settings"),
+        SETTINGS_PAGE,
     ], position="top").run()
